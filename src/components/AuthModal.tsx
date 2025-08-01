@@ -106,7 +106,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setLoading(true);
     try {
-      // Temporarily disable OTP - directly create user and sign in
+      // Create user account with email confirmation disabled
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -125,30 +125,16 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           description: error.message,
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
-      // Immediately sign in the user (bypassing email confirmation)
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        toast({
-          title: "Sign In Failed",
-          description: signInError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (signInData.user) {
+      if (data.user) {
         // Create user profile
         const { error: profileError } = await supabase
           .from("profiles")
           .insert({
-            user_id: signInData.user.id,
+            user_id: data.user.id,
             email: email,
             role: 'user',
             firm_id: selectedFirmId,
@@ -364,28 +350,33 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               
               <div className="space-y-2">
                 <Label htmlFor="firm-search">Firm Name</Label>
-                <Input
-                  id="firm-search"
-                  type="text"
-                  placeholder="Start typing your firm name..."
-                  value={firmName}
-                  onChange={(e) => setFirmName(e.target.value)}
-                  disabled={loading}
-                />
-                {firms.length > 0 && (
-                  <Select value={selectedFirmId} onValueChange={setSelectedFirmId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your firm" />
-                    </SelectTrigger>
-                    <SelectContent>
+                <div className="relative">
+                  <Input
+                    id="firm-search"
+                    type="text"
+                    placeholder="Start typing your firm name..."
+                    value={firmName}
+                    onChange={(e) => setFirmName(e.target.value)}
+                    disabled={loading}
+                  />
+                  {firms.length > 0 && firmName.length > 1 && (
+                    <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
                       {firms.map((firm) => (
-                        <SelectItem key={firm.id} value={firm.id}>
+                        <div
+                          key={firm.id}
+                          className="px-3 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                          onClick={() => {
+                            setFirmName(firm.name);
+                            setSelectedFirmId(firm.id);
+                            setFirms([]); // Clear dropdown after selection
+                          }}
+                        >
                           {firm.name}
-                        </SelectItem>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
