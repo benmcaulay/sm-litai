@@ -143,47 +143,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
 
       const domain = email.split('@')[1];
       
-      // First create and authenticate the user
-      const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password: tempPassword,
-        options: {
-          data: {
-            role: 'admin',
-            firm_name: firmName,
-            domain: domain
-          }
-        }
-      });
-
-      if (authError || !authData.user) {
-        toast({
-          title: "Error",
-          description: "Failed to create user account. Please try again.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Sign in the user immediately to get proper authentication
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: tempPassword,
-      });
-
-      if (signInError || !signInData.user) {
-        toast({
-          title: "Error", 
-          description: "Failed to authenticate user. Please try again.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Now create the firm with authenticated user
+      // Create the firm first (now allowed without authentication)
       const { data: newFirm, error: firmError } = await supabase
         .from("firms")
         .insert({
@@ -204,11 +164,47 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         return;
       }
 
+      // Check if user already exists
+      const { data: existingUser } = await supabase.auth.getUser();
+      
+      let userId;
+      if (existingUser?.user) {
+        // User is already signed in
+        userId = existingUser.user.id;
+      } else {
+        // Create new user
+        const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email,
+          password: tempPassword,
+          options: {
+            data: {
+              role: 'admin',
+              firm_name: firmName,
+              domain: domain
+            }
+          }
+        });
+
+        if (authError || !authData.user) {
+          console.error("User creation error:", authError);
+          toast({
+            title: "Error",
+            description: "Failed to create user account. Please try again.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+        
+        userId = authData.user.id;
+      }
+
       // Create the user profile with admin role
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
-          user_id: signInData.user.id,
+          user_id: userId,
           email: email,
           role: 'admin',
           firm_id: newFirm.id,
