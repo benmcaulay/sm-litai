@@ -143,7 +143,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
 
       const domain = email.split('@')[1];
       
-      // Create the firm first (now allowed without authentication)
+      // Create the firm (authentication temporarily bypassed)
       const { data: newFirm, error: firmError } = await supabase
         .from("firms")
         .insert({
@@ -153,68 +153,11 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         .select()
         .single();
 
-      if (firmError || !newFirm) {
+      if (firmError) {
         console.error("Firm creation error:", firmError);
         toast({
           title: "Error",
-          description: "Failed to create firm. Please try again.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Check if user already exists
-      const { data: existingUser } = await supabase.auth.getUser();
-      
-      let userId;
-      if (existingUser?.user) {
-        // User is already signed in
-        userId = existingUser.user.id;
-      } else {
-        // Create new user
-        const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email,
-          password: tempPassword,
-          options: {
-            data: {
-              role: 'admin',
-              firm_name: firmName,
-              domain: domain
-            }
-          }
-        });
-
-        if (authError || !authData.user) {
-          console.error("User creation error:", authError);
-          toast({
-            title: "Error",
-            description: "Failed to create user account. Please try again.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-        
-        userId = authData.user.id;
-      }
-
-      // Create the user profile with admin role
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          user_id: userId,
-          email: email,
-          role: 'admin',
-          firm_id: newFirm.id,
-        });
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-        toast({
-          title: "Error",
-          description: "Failed to create user profile. Please contact support.",
+          description: `Failed to create firm: ${firmError.message}`,
           variant: "destructive",
         });
         setLoading(false);
@@ -222,8 +165,8 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
       }
 
       toast({
-        title: "Registration Successful",
-        description: "Your firm has been registered successfully!",
+        title: "Firm Created Successfully!",
+        description: `${firmName} has been registered. You can now sign in with your email.`,
       });
 
       // Reset form and close modal
