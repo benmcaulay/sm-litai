@@ -130,25 +130,36 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       }
 
       if (data.user) {
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert({
-            user_id: data.user.id,
-            email: email,
-            role: 'user',
-            firm_id: selectedFirmId,
+        // Only try to create profile if user was actually created and confirmed
+        if (data.user.email_confirmed_at) {
+          // User is confirmed, create profile
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert({
+              user_id: data.user.id,
+              email: email,
+              role: 'user',
+              firm_id: selectedFirmId,
+            });
+
+          if (profileError) {
+            console.log("Profile creation error (may already exist):", profileError);
+            // Don't fail the signup if profile already exists
+          }
+
+          toast({
+            title: "Welcome!",
+            description: "Your account has been created successfully.",
           });
-
-        if (profileError) {
-          console.log("Profile creation error (may already exist):", profileError);
+          handleClose();
+        } else {
+          // User needs email confirmation
+          toast({
+            title: "Check Your Email",
+            description: "Please click the confirmation link in your email to complete registration, then try signing in.",
+          });
+          handleClose();
         }
-
-        toast({
-          title: "Welcome!",
-          description: "Your account has been created successfully.",
-        });
-        handleClose();
       }
     } catch (error) {
       toast({
