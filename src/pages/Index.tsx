@@ -44,14 +44,24 @@ const AppContent = () => {
             <p className="text-steel-blue-600 text-lg mb-8">
               AI-powered legal document automation for law firms
             </p>
-            <Button 
-              onClick={() => setShowAuthModal(true)}
-              className="bg-primary hover:bg-primary/90"
-              size="lg"
-            >
-              <LogIn className="mr-2 h-5 w-5" />
-              Get Started
-            </Button>
+            <div className="space-y-4">
+              <Button 
+                onClick={() => setShowAuthModal(true)}
+                className="bg-primary hover:bg-primary/90"
+                size="lg"
+              >
+                <LogIn className="mr-2 h-5 w-5" />
+                Log In
+              </Button>
+              <div className="text-center">
+                <button 
+                  onClick={() => setShowAuthModal(true)}
+                  className="text-sm text-muted-foreground hover:text-primary underline cursor-pointer"
+                >
+                  New Here? Register Your Firm
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <AuthModal 
