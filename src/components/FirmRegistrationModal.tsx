@@ -232,7 +232,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Work Email</Label>
+              <Label htmlFor="email">Admin Email</Label>
               <Input
                 id="email"
                 type="email"
