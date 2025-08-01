@@ -10,11 +10,13 @@ import TemplateManager from "@/components/TemplateManager";
 import DocumentGenerator from "@/components/DocumentGenerator";
 import DatabaseSettings from "@/components/DatabaseSettings";
 import { AuthModal } from "@/components/AuthModal";
+import { FirmRegistrationModal } from "@/components/FirmRegistrationModal";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showFirmRegistrationModal, setShowFirmRegistrationModal] = useState(false);
   const { user, profile, firm, loading } = useAuth();
 
   const isSetupComplete = profile?.role === 'admin' ? !!firm : !!firm;
@@ -55,7 +57,7 @@ const AppContent = () => {
               </Button>
               <div className="text-center">
                 <button 
-                  onClick={() => setShowAuthModal(true)}
+                  onClick={() => setShowFirmRegistrationModal(true)}
                   className="text-sm text-muted-foreground hover:text-primary underline cursor-pointer"
                 >
                   New Here? Register Your Firm
@@ -67,6 +69,10 @@ const AppContent = () => {
         <AuthModal 
           isOpen={showAuthModal} 
           onClose={() => setShowAuthModal(false)} 
+        />
+        <FirmRegistrationModal 
+          isOpen={showFirmRegistrationModal} 
+          onClose={() => setShowFirmRegistrationModal(false)} 
         />
       </div>
     );
