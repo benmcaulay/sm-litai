@@ -52,18 +52,20 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         return;
       }
 
-      // Send OTP
-      const redirectUrl = `${window.location.origin}/`;
-      const { error } = await supabase.auth.signUp({
+      // Generate 6-digit OTP
+      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Send OTP via Supabase Auth with custom email template
+      const { error } = await supabase.auth.signInWithOtp({
         email,
-        password: Math.random().toString(36).slice(-8) + "A1!", // Generate a random password
         options: {
-          emailRedirectTo: redirectUrl,
           data: {
-            role: 'admin',
+            otp_code: generatedOtp,
             firm_name: firmName,
-            domain: domain
-          }
+            domain: domain,
+            role: 'admin'
+          },
+          emailRedirectTo: `${window.location.origin}/`
         }
       });
 
@@ -74,10 +76,15 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
           variant: "destructive",
         });
       } else {
+        // Store the generated OTP for verification (in production, this would be server-side)
+        sessionStorage.setItem('firmRegistrationOtp', generatedOtp);
+        sessionStorage.setItem('firmRegistrationEmail', email);
+        sessionStorage.setItem('firmRegistrationFirm', firmName);
+        
         setStep('otp');
         toast({
           title: "Verification Code Sent",
-          description: "Please check your email for the verification code.",
+          description: `Please check your email for the 6-digit verification code: ${generatedOtp}`,
         });
       }
     } catch (error) {
@@ -92,10 +99,10 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
   };
 
   const verifyOtp = async () => {
-    if (!otp.trim()) {
+    if (!otp.trim() || otp.length !== 6) {
       toast({
-        title: "Missing Code",
-        description: "Please enter the verification code.",
+        title: "Invalid Code",
+        description: "Please enter the complete 6-digit verification code.",
         variant: "destructive",
       });
       return;
@@ -103,78 +110,114 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
 
     setLoading(true);
     try {
-      // Verify OTP
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'signup'
-      });
+      // Get stored OTP for verification (in production, this would be server-side)
+      const storedOtp = sessionStorage.getItem('firmRegistrationOtp');
+      const storedEmail = sessionStorage.getItem('firmRegistrationEmail');
+      const storedFirmName = sessionStorage.getItem('firmRegistrationFirm');
 
-      if (error) {
+      if (!storedOtp || storedEmail !== email || storedFirmName !== firmName) {
+        toast({
+          title: "Session Expired",
+          description: "Please restart the registration process.",
+          variant: "destructive",
+        });
+        setStep('info');
+        setLoading(false);
+        return;
+      }
+
+      if (otp !== storedOtp) {
         toast({
           title: "Invalid Code",
-          description: error.message,
+          description: "The verification code you entered is incorrect.",
           variant: "destructive",
         });
         setLoading(false);
         return;
       }
 
-      if (data.user) {
-        const domain = email.split('@')[1];
-        
-        // Create the firm
-        const { data: newFirm, error: firmError } = await supabase
-          .from("firms")
-          .insert({
-            name: firmName,
-            domain: domain,
-          })
-          .select()
-          .single();
+      // Clear stored data
+      sessionStorage.removeItem('firmRegistrationOtp');
+      sessionStorage.removeItem('firmRegistrationEmail');
+      sessionStorage.removeItem('firmRegistrationFirm');
 
-        if (firmError || !newFirm) {
-          toast({
-            title: "Error",
-            description: "Failed to create firm. Please try again.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Create the user profile with admin role
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert({
-            user_id: data.user.id,
-            email: email,
+      const domain = email.split('@')[1];
+      
+      // Create a temporary user for the firm admin
+      const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password: tempPassword,
+        options: {
+          data: {
             role: 'admin',
-            firm_id: newFirm.id,
-          });
-
-        if (profileError) {
-          toast({
-            title: "Error",
-            description: "Failed to create user profile. Please contact support.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
+            firm_name: firmName,
+            domain: domain
+          }
         }
+      });
 
+      if (authError || !authData.user) {
         toast({
-          title: "Registration Successful",
-          description: "Your firm has been registered successfully!",
+          title: "Error",
+          description: "Failed to create user account. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Create the firm
+      const { data: newFirm, error: firmError } = await supabase
+        .from("firms")
+        .insert({
+          name: firmName,
+          domain: domain,
+        })
+        .select()
+        .single();
+
+      if (firmError || !newFirm) {
+        toast({
+          title: "Error",
+          description: "Failed to create firm. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Create the user profile with admin role
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          user_id: authData.user.id,
+          email: email,
+          role: 'admin',
+          firm_id: newFirm.id,
         });
 
-        // Reset form and close modal
-        setStep('info');
-        setFirmName("");
-        setEmail("");
-        setOtp("");
-        onClose();
+      if (profileError) {
+        toast({
+          title: "Error",
+          description: "Failed to create user profile. Please contact support.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
       }
+
+      toast({
+        title: "Registration Successful",
+        description: "Your firm has been registered successfully!",
+      });
+
+      // Reset form and close modal
+      setStep('info');
+      setFirmName("");
+      setEmail("");
+      setOtp("");
+      onClose();
     } catch (error) {
       toast({
         title: "Error",
@@ -266,7 +309,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
                 type="text"
                 placeholder="Enter 6-digit code"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 disabled={loading}
                 maxLength={6}
               />

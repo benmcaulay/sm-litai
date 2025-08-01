@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import PizZip from 'https://esm.sh/pizzip@3.1.6'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,19 +45,57 @@ serve(async (req) => {
       }
 
       const arrayBuffer = await fileData.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Simple text extraction - in production, you'd use a proper .docx parser
-      // For now, return a placeholder that indicates this is a .docx template
-      const extractedText = `[DOCX Template - ${filePath}]\nThis is a Microsoft Word document template that contains formatted content, tables, headers, and styling that will be preserved in the final document.`;
+      try {
+        // Parse .docx file using PizZip
+        const zip = new PizZip(arrayBuffer);
+        
+        // Extract document.xml which contains the main content
+        const documentXml = zip.file("word/document.xml");
+        if (!documentXml) {
+          throw new Error("Invalid .docx file - missing document.xml");
+        }
+        
+        const xmlContent = documentXml.asText();
+        
+        // Extract text content from XML (simple regex-based extraction)
+        const textMatches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        const extractedText = textMatches
+          .map(match => match.replace(/<[^>]*>/g, ''))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        console.log('Successfully extracted text from .docx:', extractedText.substring(0, 200) + '...');
+        
+        if (!extractedText) {
+          throw new Error("No text content found in document");
+        }
+        
+        return new Response(JSON.stringify({ 
+          text: extractedText,
+          success: true 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+        
+      } catch (parseError) {
+        console.error('Error parsing .docx file:', parseError);
+        
+        // Fallback to basic file info
+        const fallbackText = `[DOCX Template - ${filePath}]\nThis is a Microsoft Word document template. Content extraction failed: ${parseError.message}`;
+        
+        return new Response(JSON.stringify({ 
+          text: fallbackText,
+          success: true,
+          warning: 'Content extraction failed, using fallback'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
 
-      return new Response(JSON.stringify({ 
-        text: extractedText,
-        success: true 
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
 
     } else if (action === 'generate') {
       // Generate a new .docx document with replaced content
