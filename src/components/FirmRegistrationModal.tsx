@@ -143,7 +143,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
 
       const domain = email.split('@')[1];
       
-      // Create a temporary user for the firm admin
+      // First create and authenticate the user
       const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -166,8 +166,24 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         setLoading(false);
         return;
       }
-      
-      // Create the firm
+
+      // Sign in the user immediately to get proper authentication
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: tempPassword,
+      });
+
+      if (signInError || !signInData.user) {
+        toast({
+          title: "Error", 
+          description: "Failed to authenticate user. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Now create the firm with authenticated user
       const { data: newFirm, error: firmError } = await supabase
         .from("firms")
         .insert({
@@ -178,6 +194,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         .single();
 
       if (firmError || !newFirm) {
+        console.error("Firm creation error:", firmError);
         toast({
           title: "Error",
           description: "Failed to create firm. Please try again.",
@@ -191,13 +208,14 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
-          user_id: authData.user.id,
+          user_id: signInData.user.id,
           email: email,
           role: 'admin',
           firm_id: newFirm.id,
         });
 
       if (profileError) {
+        console.error("Profile creation error:", profileError);
         toast({
           title: "Error",
           description: "Failed to create user profile. Please contact support.",
