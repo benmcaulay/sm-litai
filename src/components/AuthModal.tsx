@@ -106,12 +106,12 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/`;
-      const { error } = await supabase.auth.signUp({
+      // Temporarily disable OTP - directly create user and sign in
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: `${window.location.origin}/`,
           data: {
             firm_id: selectedFirmId,
             role: 'user'
@@ -125,12 +125,44 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        setStep('otp');
+        return;
+      }
+
+      // Immediately sign in the user (bypassing email confirmation)
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
         toast({
-          title: "Verification Code Sent",
-          description: "Please check your email for a 6-digit verification code.",
+          title: "Sign In Failed",
+          description: signInError.message,
+          variant: "destructive",
         });
+        return;
+      }
+
+      if (signInData.user) {
+        // Create user profile
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: signInData.user.id,
+            email: email,
+            role: 'user',
+            firm_id: selectedFirmId,
+          });
+
+        if (profileError) {
+          console.log("Profile creation error (may already exist):", profileError);
+        }
+
+        toast({
+          title: "Welcome!",
+          description: "Your account has been created successfully.",
+        });
+        handleClose();
       }
     } catch (error) {
       toast({
