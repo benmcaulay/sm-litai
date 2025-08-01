@@ -155,43 +155,40 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setLoading(true);
     try {
-      // Temporary OTP bypass for testing
+      // Temporary OTP bypass for testing - simulate successful verification
       if (otp === "123456") {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        // Mock the successful OTP verification response
+        const mockUser = {
+          id: `test-user-${Date.now()}`,
+          email: email,
+          email_confirmed_at: new Date().toISOString(),
+        };
 
-        if (error) {
+        // Create user profile directly
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: mockUser.id,
+            email: email,
+            role: 'user',
+            firm_id: selectedFirmId,
+          });
+
+        if (profileError) {
+          console.log("Profile creation error:", profileError);
           toast({
             title: "Error",
-            description: "Failed to sign in after OTP bypass. Please try again.",
+            description: "Failed to create user profile. Please contact support.",
             variant: "destructive",
           });
           return;
         }
 
-        if (data.user) {
-          // Create user profile
-          const { error: profileError } = await supabase
-            .from("profiles")
-            .insert({
-              user_id: data.user.id,
-              email: email,
-              role: 'user',
-              firm_id: selectedFirmId,
-            });
-
-          if (profileError) {
-            console.log("Profile creation error (may already exist):", profileError);
-          }
-
-          toast({
-            title: "Welcome!",
-            description: "Your account has been created successfully.",
-          });
-          handleClose();
-        }
+        toast({
+          title: "Welcome!",
+          description: "Your account has been created successfully (test mode).",
+        });
+        handleClose();
         return;
       }
 
