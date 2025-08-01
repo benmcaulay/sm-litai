@@ -82,32 +82,41 @@ export type Database = {
       templates: {
         Row: {
           category: string | null
-          content: string
+          content: string | null
           created_at: string | null
           created_by: string
+          file_path: string | null
+          file_type: string | null
           firm_id: string
           id: string
           name: string
+          template_variables: Json | null
           updated_at: string | null
         }
         Insert: {
           category?: string | null
-          content: string
+          content?: string | null
           created_at?: string | null
           created_by: string
+          file_path?: string | null
+          file_type?: string | null
           firm_id: string
           id?: string
           name: string
+          template_variables?: Json | null
           updated_at?: string | null
         }
         Update: {
           category?: string | null
-          content?: string
+          content?: string | null
           created_at?: string | null
           created_by?: string
+          file_path?: string | null
+          file_type?: string | null
           firm_id?: string
           id?: string
           name?: string
+          template_variables?: Json | null
           updated_at?: string | null
         }
         Relationships: [

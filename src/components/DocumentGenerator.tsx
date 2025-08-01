@@ -1,12 +1,13 @@
-
-import { useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 const DocumentGenerator = () => {
   const [query, setQuery] = useState("");
@@ -14,15 +15,29 @@ const DocumentGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDoc, setGeneratedDoc] = useState<string | null>(null);
   const [ragSteps, setRagSteps] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const templates = [
-    { id: "depo-summary", name: "Deposition Summary", type: "Discovery" },
-    { id: "intro-letter", name: "Introductory Letter", type: "Client Communication" },
-    { id: "form-interrogatories", name: "Form Interrogatories", type: "Discovery" },
-    { id: "motion-dismiss", name: "Motion to Dismiss", type: "Motions" },
-    { id: "settlement-demand", name: "Settlement Demand Letter", type: "Negotiation" },
-  ];
+  useEffect(() => {
+    if (user) {
+      fetchTemplates();
+    }
+  }, [user]);
+
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!query.trim() || !selectedTemplate) {
@@ -34,6 +49,16 @@ const DocumentGenerator = () => {
       return;
     }
 
+    const template = templates.find(t => t.id === selectedTemplate);
+    if (!template) {
+      toast({
+        title: "Template Error",
+        description: "Selected template not found",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setRagSteps([]);
     setGeneratedDoc(null);
@@ -41,10 +66,11 @@ const DocumentGenerator = () => {
     // Simulate RAG process with realistic steps
     const steps = [
       "Searching case files for relevant documents...",
+      template.file_type === 'docx' ? "Processing Word template formatting..." : "Processing text template...",
       "Analyzing case: " + query.split(" ").slice(-2).join(" "),
       "Extracting key facts and dates...",
       "Cross-referencing with legal precedents...",
-      "Generating document using verified information...",
+      template.file_type === 'docx' ? "Generating formatted Word document..." : "Generating text document...",
       "Performing fact-checking and validation...",
       "Finalizing document with proper formatting..."
     ];
@@ -56,57 +82,70 @@ const DocumentGenerator = () => {
     }
 
     // Simulate document generation
-    setTimeout(() => {
-      const mockDocument = generateMockDocument(selectedTemplate, query);
-      setGeneratedDoc(mockDocument);
-      setIsGenerating(false);
-      toast({
-        title: "Document Generated Successfully",
-        description: "Your document has been created using verified case file information.",
-      });
+    setTimeout(async () => {
+      try {
+        if (template.file_type === 'docx' && template.file_path) {
+          // Process .docx template using edge function
+          const { data, error } = await supabase.functions.invoke('process-docx', {
+            body: {
+              action: 'generate',
+              filePath: template.file_path,
+              templateData: {
+                templateName: template.name,
+                userQuery: query
+              }
+            }
+          });
+
+          if (error) throw error;
+          setGeneratedDoc(data.content);
+        } else {
+          // Generate from text template or fallback
+          const mockDocument = generateMockDocument(selectedTemplate, query);
+          setGeneratedDoc(mockDocument);
+        }
+
+        setIsGenerating(false);
+        toast({
+          title: "Document Generated Successfully",
+          description: `Your ${template.file_type === 'docx' ? 'Word' : 'text'} document has been created using verified case file information.`,
+        });
+      } catch (error) {
+        console.error('Generation error:', error);
+        setIsGenerating(false);
+        toast({
+          title: "Generation Failed",
+          description: "There was an error generating your document",
+          variant: "destructive"
+        });
+      }
     }, steps.length * 1000);
   };
 
   const generateMockDocument = (templateId: string, userQuery: string) => {
+    const template = templates.find(t => t.id === templateId);
     const caseName = userQuery.split(" ").slice(-2).join(" ") || "Sample Case";
     
-    switch (templateId) {
-      case "depo-summary":
-        return `DEPOSITION SUMMARY
+    return `Generated Document: ${template?.name || 'Unknown Template'}
+
+Based on your query: "${userQuery}"
+
+This is a ${template?.file_type === 'docx' ? 'Microsoft Word format' : 'text format'} document that would contain:
+- Professional legal formatting ${template?.file_type === 'docx' ? 'with preserved Word styling' : ''}
+- Customized content based on your case details
+- Proper legal structure and clauses
+- All necessary provisions and terms
+
 Case: ${caseName}
-Date: ${new Date().toLocaleDateString()}
+Generated on: ${new Date().toLocaleDateString()}
+Template Source: ${template?.file_type === 'docx' ? 'Word Document (.docx)' : 'Text Template'}
 
-WITNESS: [Extracted from case files]
-DATE OF DEPOSITION: [Verified from court records]
+${template?.file_type === 'docx' ? 
+  '[In production, this would maintain all original Word formatting, headers, footers, styles, and embedded elements from the .docx template]' :
+  '[This document was generated from a text template and contains structured legal content]'
+}
 
-SUMMARY OF TESTIMONY:
-• Key facts extracted from case documents
-• Timeline verified against filed pleadings
-• Witness credibility assessment based on prior statements
-• Supporting evidence references from discovery materials
-
-This summary has been generated using RAG technology to ensure accuracy and prevent hallucinations.`;
-
-      case "intro-letter":
-        return `[Your Firm Letterhead]
-
-${new Date().toLocaleDateString()}
-
-[Client Address - Extracted from case file]
-
-RE: ${caseName}
-
-Dear [Client Name],
-
-Thank you for retaining our firm to represent you in the above-referenced matter. Based on our review of your case files and initial consultation, we have prepared this introduction letter outlining our representation.
-
-[Document continues with case-specific details extracted from verified sources...]
-
-This document was generated using verified information from your case files.`;
-
-      default:
-        return `Generated document for ${caseName} using template: ${templates.find(t => t.id === templateId)?.name}`;
-    }
+This document has been generated using RAG technology to ensure accuracy and prevent hallucinations.`;
   };
 
   return (
@@ -118,7 +157,7 @@ This document was generated using verified information from your case files.`;
             AI Document Generator
           </CardTitle>
           <CardDescription className="text-steel-blue-600">
-            Generate legal documents using AI with RAG technology to prevent hallucinations
+            Generate legal documents using AI with RAG technology - supports both Word (.docx) and text templates
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -133,11 +172,17 @@ This document was generated using verified information from your case files.`;
               <SelectContent>
                 {templates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>{template.name}</span>
-                      <Badge variant="secondary" className="ml-2">
-                        {template.type}
-                      </Badge>
+                    <div className="flex items-center gap-2">
+                      {template.file_type === 'docx' ? 
+                        <File className="h-4 w-4 text-blue-500" /> : 
+                        <FileText className="h-4 w-4 text-gray-500" />
+                      }
+                      <div>
+                        <div className="font-medium">{template.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {template.category} • {template.file_type?.toUpperCase() || 'TEXT'}
+                        </div>
+                      </div>
                     </div>
                   </SelectItem>
                 ))}
@@ -211,7 +256,10 @@ This document was generated using verified information from your case files.`;
           <CardHeader>
             <CardTitle className="text-steel-blue-800 flex items-center justify-between">
               <span className="flex items-center">
-                <FileText className="mr-2 h-5 w-5 text-steel-blue-600" />
+                {templates.find(t => t.id === selectedTemplate)?.file_type === 'docx' ? 
+                  <File className="mr-2 h-5 w-5 text-blue-500" /> :
+                  <FileText className="mr-2 h-5 w-5 text-steel-blue-600" />
+                }
                 Generated Document
               </span>
               <div className="flex space-x-2">

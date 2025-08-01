@@ -1,67 +1,48 @@
-
-import { useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Edit, Trash2, Plus, Search, Filter } from "lucide-react";
+import { FileText, Upload, Edit, Trash2, Plus, Search, Filter, File } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 const TemplateManager = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const templates = [
-    {
-      id: 1,
-      name: "Deposition Summary Template",
-      category: "Discovery",
-      lastModified: "2024-01-15",
-      size: "2.4 KB",
-      usage: 45,
-      status: "active"
-    },
-    {
-      id: 2,
-      name: "Client Introductory Letter",
-      category: "Client Communication",
-      lastModified: "2024-01-12",
-      size: "1.8 KB",
-      usage: 23,
-      status: "active"
-    },
-    {
-      id: 3,
-      name: "Form Interrogatories - Personal Injury",
-      category: "Discovery",
-      lastModified: "2024-01-10",
-      size: "5.2 KB",
-      usage: 67,
-      status: "active"
-    },
-    {
-      id: 4,
-      name: "Motion to Dismiss Template",
-      category: "Motions",
-      lastModified: "2024-01-08",
-      size: "3.1 KB",
-      usage: 12,
-      status: "draft"
-    },
-    {
-      id: 5,
-      name: "Settlement Demand Letter",
-      category: "Negotiation",
-      lastModified: "2024-01-05",
-      size: "2.7 KB",
-      usage: 34,
-      status: "active"
+  useEffect(() => {
+    if (user) {
+      fetchTemplates();
     }
-  ];
+  }, [user]);
 
-  const categories = ["All", "Discovery", "Client Communication", "Motions", "Negotiation", "Pleadings"];
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch templates",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const categories = ["All", "Discovery", "Client Communication", "Motions", "Negotiation", "Pleadings", "Uploaded"];
 
   const filteredTemplates = templates.filter(template => {
     const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -69,26 +50,113 @@ const TemplateManager = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleUpload = () => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    const allowedTypes = ['.docx', '.doc', '.txt'];
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedTypes.includes(fileExtension)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a .docx, .doc, or .txt file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('templates')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get user's firm_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('firm_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.firm_id) {
+        throw new Error('User must be associated with a firm to upload templates');
+      }
+
+      // Create template record
+      const { error: insertError } = await supabase
+        .from('templates')
+        .insert({
+          name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
+          category: 'Uploaded',
+          file_path: filePath,
+          file_type: fileExtension === '.txt' ? 'text' : 'docx',
+          content: null, // Will be extracted when needed
+          created_by: user.id,
+          firm_id: profile.firm_id
+        });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Success",
+        description: "Template uploaded successfully"
+      });
+      
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error uploading template:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload template",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleEdit = (templateId: string) => {
     toast({
-      title: "Template Upload",
-      description: "File upload functionality would be implemented here.",
+      title: "Coming Soon",
+      description: "Template editing will be available soon"
     });
   };
 
-  const handleEdit = (templateId: number) => {
-    toast({
-      title: "Edit Template",
-      description: `Opening editor for template ${templateId}`,
-    });
-  };
+  const handleDelete = async (templateId: string) => {
+    try {
+      const template = templates.find(t => t.id === templateId);
+      if (template?.file_path) {
+        await supabase.storage.from('templates').remove([template.file_path]);
+      }
+      
+      const { error } = await supabase
+        .from('templates')
+        .delete()
+        .eq('id', templateId);
 
-  const handleDelete = (templateId: number) => {
-    toast({
-      title: "Template Deleted",
-      description: "Template has been removed from your library.",
-      variant: "destructive",
-    });
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Template deleted successfully"
+      });
+      
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete template",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -100,13 +168,22 @@ const TemplateManager = () => {
               <FileText className="mr-2 h-5 w-5 text-steel-blue-600" />
               Template Library
             </span>
-            <Button onClick={handleUpload} className="bg-primary hover:bg-primary/90">
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Template
-            </Button>
+            <div className="relative">
+              <input
+                type="file"
+                accept=".docx,.doc,.txt"
+                onChange={handleFileUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                disabled={isUploading}
+              />
+              <Button disabled={isUploading} className="bg-primary hover:bg-primary/90">
+                <Upload className="mr-2 h-4 w-4" />
+                {isUploading ? 'Uploading...' : 'Upload Template'}
+              </Button>
+            </div>
           </CardTitle>
           <CardDescription className="text-steel-blue-600">
-            Manage your firm's document templates for AI generation
+            Manage your firm's document templates for AI generation - supports .docx, .doc, and .txt files
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -146,30 +223,27 @@ const TemplateManager = () => {
                 className="flex items-center justify-between p-4 border border-steel-blue-200 rounded-lg hover:bg-steel-blue-50 transition-colors"
               >
                 <div className="flex items-center space-x-4">
-                  <FileText className="h-8 w-8 text-steel-blue-500" />
+                  {template.file_type === 'docx' ? 
+                    <File className="h-8 w-8 text-blue-500" /> : 
+                    <FileText className="h-8 w-8 text-steel-blue-500" />
+                  }
                   <div>
                     <h3 className="font-medium text-steel-blue-800">{template.name}</h3>
                     <div className="flex items-center space-x-2 mt-1">
                       <Badge variant="secondary" className="bg-steel-blue-100 text-steel-blue-700">
                         {template.category}
                       </Badge>
-                      <Badge 
-                        variant={template.status === "active" ? "default" : "secondary"}
-                        className={template.status === "active" ? "bg-green-100 text-green-800" : ""}
-                      >
-                        {template.status}
+                      <Badge variant="outline" className="text-xs">
+                        {template.file_type?.toUpperCase() || 'TEXT'}
                       </Badge>
-                      <span className="text-xs text-steel-blue-600">
-                        Used {template.usage} times
-                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-4">
                   <div className="text-right text-sm text-steel-blue-600">
-                    <div>{template.size}</div>
-                    <div>Modified {template.lastModified}</div>
+                    <div>{template.file_type === 'docx' ? 'Word Document' : 'Text File'}</div>
+                    <div>Created {new Date(template.created_at).toLocaleDateString()}</div>
                   </div>
                   <div className="flex space-x-2">
                     <Button
@@ -198,10 +272,19 @@ const TemplateManager = () => {
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-steel-blue-400 mx-auto mb-4" />
               <p className="text-steel-blue-600">No templates found matching your criteria.</p>
-              <Button variant="outline" className="mt-4 border-steel-blue-300">
-                <Plus className="mr-2 h-4 w-4" />
-                Create New Template
-              </Button>
+              <div className="relative inline-block mt-4">
+                <input
+                  type="file"
+                  accept=".docx,.doc,.txt"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={isUploading}
+                />
+                <Button variant="outline" className="border-steel-blue-300" disabled={isUploading}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  {isUploading ? 'Uploading...' : 'Upload Template'}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -219,15 +302,15 @@ const TemplateManager = () => {
                 <span className="font-medium text-steel-blue-800">{templates.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-steel-blue-600">Active</span>
-                <span className="font-medium text-green-600">
-                  {templates.filter(t => t.status === "active").length}
+                <span className="text-steel-blue-600">Word Documents</span>
+                <span className="font-medium text-blue-600">
+                  {templates.filter(t => t.file_type === 'docx').length}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-steel-blue-600">Draft</span>
-                <span className="font-medium text-yellow-600">
-                  {templates.filter(t => t.status === "draft").length}
+                <span className="text-steel-blue-600">Text Files</span>
+                <span className="font-medium text-green-600">
+                  {templates.filter(t => t.file_type === 'text').length}
                 </span>
               </div>
             </div>
@@ -236,19 +319,24 @@ const TemplateManager = () => {
 
         <Card className="bg-white/70 border-steel-blue-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-steel-blue-800">Most Used</CardTitle>
+            <CardTitle className="text-lg text-steel-blue-800">Recent Templates</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {templates
-                .sort((a, b) => b.usage - a.usage)
                 .slice(0, 3)
                 .map((template, index) => (
                   <div key={template.id} className="flex justify-between">
-                    <span className="text-steel-blue-600 truncate">
-                      {index + 1}. {template.name.slice(0, 20)}...
+                    <span className="text-steel-blue-600 truncate flex items-center">
+                      {template.file_type === 'docx' ? 
+                        <File className="h-3 w-3 mr-1 text-blue-500" /> : 
+                        <FileText className="h-3 w-3 mr-1" />
+                      }
+                      {template.name.slice(0, 20)}...
                     </span>
-                    <span className="font-medium text-steel-blue-800">{template.usage}</span>
+                    <span className="text-xs text-steel-blue-500">
+                      {template.file_type?.toUpperCase()}
+                    </span>
                   </div>
                 ))}
             </div>
@@ -261,17 +349,26 @@ const TemplateManager = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".docx,.doc,.txt"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={isUploading}
+                />
+                <Button variant="outline" className="w-full justify-start border-steel-blue-300" disabled={isUploading}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload New Template
+                </Button>
+              </div>
               <Button variant="outline" className="w-full justify-start border-steel-blue-300">
                 <Plus className="mr-2 h-4 w-4" />
-                New Template
-              </Button>
-              <Button variant="outline" className="w-full justify-start border-steel-blue-300">
-                <Upload className="mr-2 h-4 w-4" />
-                Import Templates
+                Create Text Template
               </Button>
               <Button variant="outline" className="w-full justify-start border-steel-blue-300">
                 <Filter className="mr-2 h-4 w-4" />
-                Bulk Edit
+                Manage Categories
               </Button>
             </div>
           </CardContent>
