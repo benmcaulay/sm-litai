@@ -155,6 +155,46 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setLoading(true);
     try {
+      // Temporary OTP bypass for testing
+      if (otp === "123456") {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          toast({
+            title: "Error",
+            description: "Failed to sign in after OTP bypass. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (data.user) {
+          // Create user profile
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert({
+              user_id: data.user.id,
+              email: email,
+              role: 'user',
+              firm_id: selectedFirmId,
+            });
+
+          if (profileError) {
+            console.log("Profile creation error (may already exist):", profileError);
+          }
+
+          toast({
+            title: "Welcome!",
+            description: "Your account has been created successfully.",
+          });
+          handleClose();
+        }
+        return;
+      }
+
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token: otp,
