@@ -10,136 +10,20 @@ export type Database = {
   // Allows to automatically instanciate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.12 (cd3cf9e)"
   }
   public: {
     Tables: {
-      firms: {
-        Row: {
-          created_at: string
-          database_config: Json | null
-          domain: string
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          database_config?: Json | null
-          domain: string
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          database_config?: Json | null
-          domain?: string
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          email: string
-          firm_id: string | null
-          id: string
-          role: Database["public"]["Enums"]["user_role"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          firm_id?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["user_role"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          firm_id?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["user_role"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_firm_id_fkey"
-            columns: ["firm_id"]
-            isOneToOne: false
-            referencedRelation: "firms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      templates: {
-        Row: {
-          category: string | null
-          content: string
-          created_at: string
-          created_by: string
-          firm_id: string
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          category?: string | null
-          content: string
-          created_at?: string
-          created_by: string
-          firm_id: string
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string | null
-          content?: string
-          created_at?: string
-          created_by?: string
-          firm_id?: string
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "templates_firm_id_fkey"
-            columns: ["firm_id"]
-            isOneToOne: false
-            referencedRelation: "firms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      get_user_firm_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_user_role: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
-      user_role: "admin" | "user"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -266,8 +150,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      user_role: ["admin", "user"],
-    },
+    Enums: {},
   },
 } as const
