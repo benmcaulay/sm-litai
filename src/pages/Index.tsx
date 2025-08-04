@@ -147,9 +147,11 @@ const AppContent = () => {
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Card className="bg-white/70 border-steel-blue-200 hover:bg-white/90 transition-all duration-300">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-steel-blue-700">Active Templates</CardTitle>
-                  <FileText className="h-4 w-4 text-steel-blue-500 ml-auto" />
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-steel-blue-700 flex items-center">
+                    <FileText className="mr-2 h-4 w-4 text-steel-blue-500" />
+                    Active Templates
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-steel-blue-800">24</div>
@@ -158,9 +160,11 @@ const AppContent = () => {
               </Card>
 
               <Card className="bg-white/70 border-steel-blue-200 hover:bg-white/90 transition-all duration-300">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-steel-blue-700">Documents Generated</CardTitle>
-                  <Zap className="h-4 w-4 text-steel-blue-500 ml-auto" />
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-steel-blue-700 flex items-center">
+                    <Zap className="mr-2 h-4 w-4 text-steel-blue-500" />
+                    Documents Generated
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-steel-blue-800">1,247</div>
@@ -169,9 +173,11 @@ const AppContent = () => {
               </Card>
 
               <Card className="bg-white/70 border-steel-blue-200 hover:bg-white/90 transition-all duration-300">
-                <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-steel-blue-700">Case Files Indexed</CardTitle>
-                  <Database className="h-4 w-4 text-steel-blue-500 ml-auto" />
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-steel-blue-700 flex items-center">
+                    <Database className="mr-2 h-4 w-4 text-steel-blue-500" />
+                    Case Files Indexed
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-steel-blue-800">5,832</div>
