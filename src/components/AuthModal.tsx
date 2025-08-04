@@ -56,18 +56,26 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      console.log("DEBUG: Attempting sign in with email:", email.trim());
+      console.log("DEBUG: Password length:", password.length);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
         password,
       });
 
+      console.log("DEBUG: Sign in response data:", data);
+      console.log("DEBUG: Sign in error:", error);
+
       if (error) {
+        console.log("DEBUG: Full error object:", JSON.stringify(error, null, 2));
         toast({
           title: "Sign In Failed",
-          description: error.message,
+          description: `${error.message} (Debug: Email="${email.trim()}", Error Code: ${error.status || 'unknown'})`,
           variant: "destructive",
         });
       } else {
+        console.log("DEBUG: Sign in successful, user:", data.user?.email);
         toast({
           title: "Welcome back!",
           description: "You have been signed in successfully.",
@@ -75,6 +83,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         handleClose();
       }
     } catch (error) {
+      console.log("DEBUG: Unexpected error:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred. Please try again.",
