@@ -26,7 +26,21 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [resetPasswordMode, setResetPasswordMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const { toast } = useToast();
+
+  // Check for password reset session
+  useEffect(() => {
+    const checkForPasswordReset = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && window.location.hash.includes('type=recovery')) {
+        setResetPasswordMode(true);
+      }
+    };
+    checkForPasswordReset();
+  }, []);
 
   // Load firms for autocomplete
   useEffect(() => {
@@ -283,6 +297,65 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!newPassword.trim() || !confirmNewPassword.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter and confirm your new password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      toast({
+        title: "Password Mismatch", 
+        description: "Passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        toast({
+          title: "Password Update Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Password Updated",
+          description: "Your password has been successfully updated.",
+        });
+        setResetPasswordMode(false);
+        handleClose();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       toast({
@@ -330,9 +403,12 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setFirmName("");
     setSelectedFirmId("");
     setOtp("");
+    setNewPassword("");
+    setConfirmNewPassword("");
     setStep('auth');
     setIsSignUp(false);
     setForgotPasswordMode(false);
+    setResetPasswordMode(false);
     onClose();
   };
 
@@ -495,6 +571,46 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               </Button>
             </TabsContent>
           </Tabs>
+        )}
+
+        {resetPasswordMode && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Please enter your new password
+            </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+
+            <Button 
+              onClick={handleResetPassword}
+              disabled={loading}
+              className="w-full"
+            >
+              {loading ? "Updating Password..." : "Update Password"}
+            </Button>
+          </div>
         )}
 
         {step === 'otp' && (
