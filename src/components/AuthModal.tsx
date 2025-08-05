@@ -25,6 +25,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [otp, setOtp] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
   const { toast } = useToast();
 
   // Load firms for autocomplete
@@ -282,6 +283,46 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast({
+        title: "Email Required",
+        description: "Please enter your email address to reset your password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/`,
+      });
+
+      if (error) {
+        toast({
+          title: "Reset Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Reset Email Sent",
+          description: "Check your email for a password reset link.",
+        });
+        setForgotPasswordMode(false);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleClose = () => {
     setEmail("");
     setPassword("");
@@ -291,6 +332,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setOtp("");
     setStep('auth');
     setIsSignUp(false);
+    setForgotPasswordMode(false);
     onClose();
   };
 
@@ -360,6 +402,15 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 className="w-full"
               >
                 {loading ? "Signing in..." : "Sign In"}
+              </Button>
+
+              <Button 
+                variant="ghost"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="w-full text-sm"
+              >
+                Forgot Password?
               </Button>
             </TabsContent>
 
