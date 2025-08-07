@@ -52,41 +52,97 @@ const TemplateManager = () => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user) {
+      toast({
+        title: "Upload Failed",
+        description: "Please select a file and ensure you're logged in",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload a file smaller than 10MB",
+        variant: "destructive"
+      });
+      return;
+    }
 
     // Validate file type
     const allowedTypes = ['.docx', '.doc', '.txt'];
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!allowedTypes.includes(fileExtension)) {
       toast({
-        title: "Invalid file type",
+        title: "Invalid File Type",
         description: "Please upload a .docx, .doc, or .txt file",
         variant: "destructive"
       });
       return;
     }
 
+    // Validate file name
+    if (file.name.length > 100) {
+      toast({
+        title: "Filename Too Long",
+        description: "Please use a shorter filename (max 100 characters)",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsUploading(true);
+    console.log('Starting template upload for file:', file.name);
+    
     try {
       const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      console.log('Uploading to path:', filePath);
       
       // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('templates')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        
+        // Provide specific error messages based on error type
+        if (uploadError.message?.includes('Policy')) {
+          throw new Error('Storage access denied. Please contact your administrator to configure storage permissions.');
+        } else if (uploadError.message?.includes('Bucket')) {
+          throw new Error('Template storage bucket not found. Please contact your administrator.');
+        } else if (uploadError.message?.includes('size')) {
+          throw new Error('File size exceeds storage limits. Please use a smaller file.');
+        } else if (uploadError.message?.includes('duplicate')) {
+          throw new Error('A file with this name already exists. Please rename your file or delete the existing one.');
+        } else {
+          throw new Error(`Storage upload failed: ${uploadError.message}`);
+        }
+      }
+
+      console.log('File uploaded successfully, fetching user profile...');
 
       // Get user's firm_id
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('firm_id')
         .eq('user_id', user.id)
         .single();
 
-      if (!profile?.firm_id) {
-        throw new Error('User must be associated with a firm to upload templates');
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        throw new Error('Unable to fetch user profile. Please ensure your account is properly set up.');
       }
+
+      if (!profile?.firm_id) {
+        console.error('No firm_id found for user');
+        throw new Error('You must be associated with a firm to upload templates. Please contact your administrator.');
+      }
+
+      console.log('Creating template record...');
 
       // Create template record
       const { error: insertError } = await supabase
@@ -101,19 +157,48 @@ const TemplateManager = () => {
           firm_id: profile.firm_id
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Database insert error:', insertError);
+        
+        // Clean up uploaded file if database insert fails
+        await supabase.storage.from('templates').remove([filePath]);
+        
+        if (insertError.message?.includes('duplicate')) {
+          throw new Error('A template with this name already exists. Please use a different name.');
+        } else if (insertError.message?.includes('permission')) {
+          throw new Error('Database permission denied. Please contact your administrator.');
+        } else if (insertError.message?.includes('foreign key')) {
+          throw new Error('Invalid firm association. Please contact your administrator.');
+        } else {
+          throw new Error(`Database error: ${insertError.message}`);
+        }
+      }
+
+      console.log('Template uploaded and recorded successfully');
 
       toast({
-        title: "Success",
-        description: "Template uploaded successfully"
+        title: "Upload Successful",
+        description: `Template "${file.name}" uploaded successfully`
       });
       
       fetchTemplates();
-    } catch (error) {
-      console.error('Error uploading template:', error);
+    } catch (error: any) {
+      console.error('Template upload error:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = "An unexpected error occurred while uploading your template.";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code === 'NETWORK_ERROR') {
+        errorMessage = "Network connection failed. Please check your internet connection and try again.";
+      } else if (error.code === 'TIMEOUT') {
+        errorMessage = "Upload timed out. Please try again with a smaller file.";
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to upload template",
+        title: "Upload Failed",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
