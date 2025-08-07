@@ -416,19 +416,9 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-semibold">
-              {step === 'otp' ? 'Verify Email' : 'LitAI Authentication'}
-            </DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="h-6 w-6"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle className="text-xl font-semibold">
+            {step === 'otp' ? 'Verify Email' : 'LitAI Authentication'}
+          </DialogTitle>
         </DialogHeader>
 
         {step === 'auth' && (
