@@ -52,21 +52,17 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         return;
       }
 
-      // Generate 6-digit OTP
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Send OTP via Supabase Auth with custom email template
+      // Send verification email (magic link)
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
           data: {
-            otp_code: generatedOtp,
             firm_name: firmName,
             domain: domain,
-            role: 'admin'
+            role: 'admin',
           },
-          emailRedirectTo: `${window.location.origin}/`
-        }
+          emailRedirectTo: `${window.location.origin}/`,
+        },
       });
 
       if (error) {
@@ -76,15 +72,10 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
           variant: "destructive",
         });
       } else {
-        // Store the generated OTP for verification (in production, this would be server-side)
-        sessionStorage.setItem('firmRegistrationOtp', generatedOtp);
-        sessionStorage.setItem('firmRegistrationEmail', email);
-        sessionStorage.setItem('firmRegistrationFirm', firmName);
-        
         setStep('otp');
         toast({
-          title: "Verification Code Sent",
-          description: `Please check your email for the 6-digit verification code: ${generatedOtp}`,
+          title: "Magic link sent",
+          description: `We've emailed a sign-in link to ${email}. Click it, then return here to finish creating your firm.`,
         });
       }
     } catch (error) {
@@ -99,87 +90,44 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
   };
 
   const verifyOtp = async () => {
-    if (!otp.trim() || otp.length !== 6) {
-      toast({
-        title: "Invalid Code",
-        description: "Please enter the complete 6-digit verification code.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(true);
     try {
-      // Get stored OTP for verification (in production, this would be server-side)
-      const storedOtp = sessionStorage.getItem('firmRegistrationOtp');
-      const storedEmail = sessionStorage.getItem('firmRegistrationEmail');
-      const storedFirmName = sessionStorage.getItem('firmRegistrationFirm');
-
-      if (!storedOtp || storedEmail !== email || storedFirmName !== firmName) {
-        toast({
-          title: "Session Expired",
-          description: "Please restart the registration process.",
-          variant: "destructive",
-        });
-        setStep('info');
-        setLoading(false);
-        return;
-      }
-
-      if (otp !== storedOtp) {
-        toast({
-          title: "Invalid Code",
-          description: "The verification code you entered is incorrect.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Clear stored data
-      sessionStorage.removeItem('firmRegistrationOtp');
-      sessionStorage.removeItem('firmRegistrationEmail');
-      sessionStorage.removeItem('firmRegistrationFirm');
-
       const domain = email.split('@')[1];
-      
-      // Create the firm (authentication temporarily bypassed)
+
+      // Create the firm (RLS allows unauthenticated insert during registration)
       const { data: newFirm, error: firmError } = await supabase
-        .from("firms")
-        .insert({
-          name: firmName,
-          domain: domain,
-        })
+        .from('firms')
+        .insert({ name: firmName, domain })
         .select()
         .single();
 
       if (firmError) {
-        console.error("Firm creation error:", firmError);
+        console.error('Firm creation error:', firmError);
         toast({
-          title: "Error",
+          title: 'Error',
           description: `Failed to create firm: ${firmError.message}`,
-          variant: "destructive",
+          variant: 'destructive',
         });
         setLoading(false);
         return;
       }
 
       toast({
-        title: "Firm Created Successfully!",
+        title: 'Firm Created Successfully!',
         description: `${firmName} has been registered. You can now sign in with your email.`,
       });
 
       // Reset form and close modal
       setStep('info');
-      setFirmName("");
-      setEmail("");
-      setOtp("");
+      setFirmName('');
+      setEmail('');
+      setOtp('');
       onClose();
     } catch (error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -248,7 +196,7 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
               disabled={loading}
               className="w-full"
             >
-              {loading ? "Sending..." : "Send Verification Code"}
+              {loading ? "Sending..." : "Send Verification Email"}
             </Button>
           </div>
         )}
@@ -256,21 +204,9 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
         {step === 'otp' && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Enter the verification code sent to {email}
+              We sent a magic sign-in link to <span className="font-medium">{email}</span>.
+              Click the link to verify your email, then return here and continue to create your firm.
             </p>
-            
-            <div className="space-y-2">
-              <Label htmlFor="otp">Verification Code</Label>
-              <Input
-                id="otp"
-                type="text"
-                placeholder="Enter 6-digit code"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                disabled={loading}
-                maxLength={6}
-              />
-            </div>
 
             <div className="space-y-2">
               <Button 
@@ -278,7 +214,16 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
                 disabled={loading}
                 className="w-full"
               >
-                {loading ? "Verifying..." : "Verify & Create Firm"}
+                {loading ? "Processing..." : "Continue • Create Firm"}
+              </Button>
+
+              <Button 
+                variant="outline"
+                onClick={sendOtp}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Resending..." : "Resend Email"}
               </Button>
               
               <Button 
