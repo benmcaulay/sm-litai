@@ -56,15 +56,82 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const ensureProfile = async (user: User) => {
+    try {
+      const { data: existing, error: selectError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (selectError) {
+        console.warn('Profile select error:', selectError);
+      }
+
+      if (!existing) {
+        const metadata = user.user_metadata || {};
+        const role = (metadata.role === 'admin' || metadata.role === 'user') ? metadata.role : 'user';
+        const firm_id = metadata.firm_id ?? null;
+
+        const { data: inserted, error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            email: user.email ?? '',
+            role,
+            firm_id,
+          })
+          .select('*')
+          .maybeSingle();
+
+        if (insertError) {
+          console.error('Failed to create profile:', insertError);
+          return null;
+        }
+
+        setProfile(inserted);
+        if (inserted?.firm_id) {
+          const { data: firmData } = await supabase
+            .from('firms')
+            .select('*')
+            .eq('id', inserted.firm_id)
+            .maybeSingle();
+          setFirm(firmData);
+        } else {
+          setFirm(null);
+        }
+        return inserted;
+      } else {
+        setProfile(existing);
+        if (existing?.firm_id) {
+          const { data: firmData } = await supabase
+            .from('firms')
+            .select('*')
+            .eq('id', existing.firm_id)
+            .maybeSingle();
+          setFirm(firmData);
+        } else {
+          setFirm(null);
+        }
+        return existing;
+      }
+    } catch (e) {
+      console.error('ensureProfile error:', e);
+      return null;
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          setTimeout(() => {
+            ensureProfile(session.user!);
+          }, 0);
         } else {
           setProfile(null);
           setFirm(null);
@@ -79,7 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchProfile(session.user.id);
+        ensureProfile(session.user);
       } else {
         setLoading(false);
       }
