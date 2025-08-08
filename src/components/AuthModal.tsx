@@ -396,6 +396,50 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
+  // Allow users to resend the confirmation email if they didn't receive it
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) {
+      toast({
+        title: "Email Required",
+        description: "Enter your email above, then tap Resend.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: "Resend Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Confirmation Email Sent",
+          description: `We've re-sent a confirmation link to ${email.trim()}.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while resending. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleClose = () => {
     setEmail("");
     setPassword("");
@@ -558,6 +602,15 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 className="w-full"
               >
                 {loading ? "Creating account..." : "Sign Up"}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleResendConfirmation}
+                disabled={loading || !email.trim()}
+                className="w-full"
+              >
+                {loading ? "Sending..." : "Resend confirmation email"}
               </Button>
             </TabsContent>
           </Tabs>
