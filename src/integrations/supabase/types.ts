@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      external_databases: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          created_by: string
+          firm_id: string
+          id: string
+          last_sync_at: string | null
+          name: string
+          status: string
+          type: string
+          updated_at: string
+          upload_endpoint: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          created_by: string
+          firm_id: string
+          id?: string
+          last_sync_at?: string | null
+          name: string
+          status?: string
+          type: string
+          updated_at?: string
+          upload_endpoint?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          created_by?: string
+          firm_id?: string
+          id?: string
+          last_sync_at?: string | null
+          name?: string
+          status?: string
+          type?: string
+          updated_at?: string
+          upload_endpoint?: string | null
+        }
+        Relationships: []
+      }
       firms: {
         Row: {
           created_at: string | null

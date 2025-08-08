@@ -1,1 +1,8 @@
 project_id = "vrxzwhbbblkqraimfclt"
+
+[functions.db-upload-relay]
+verify_jwt = true
+
+[functions.process-docx]
+# default verify_jwt is true; keeping explicit for clarity
+verify_jwt = true

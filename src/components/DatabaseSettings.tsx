@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,44 +9,123 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Database, Server, Key, RefreshCw, CheckCircle, AlertCircle, HardDrive, Cloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
+import { supabase } from "@/integrations/supabase/client";
 const DatabaseSettings = () => {
   const [connectionStatus, setConnectionStatus] = useState("connected");
   const [autoSync, setAutoSync] = useState(true);
   const [lastSync, setLastSync] = useState("2024-01-16 09:30 AM");
   const { toast } = useToast();
 
-  const databases = [
-    {
-      id: 1,
-      name: "NetDocs Primary",
-      type: "NetDocs",
-      status: "connected",
-      lastSync: "2024-01-16 09:30 AM",
-      caseCount: 1247,
-      documentsIndexed: 15832
-    },
-    {
-      id: 2,
-      name: "Local Case Archive",
-      type: "Custom Server",
-      status: "connected",
-      lastSync: "2024-01-16 08:45 AM",
-      caseCount: 892,
-      documentsIndexed: 8934
-    },
-    {
-      id: 3,
-      name: "SharePoint Backup",
-      type: "SharePoint",
-      status: "error",
-      lastSync: "2024-01-15 03:20 PM",
-      caseCount: 456,
-      documentsIndexed: 3245
-    }
-  ];
+  const [connections, setConnections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleTestConnection = (dbId: number) => {
+  const [dbName, setDbName] = useState("");
+  const [dbType, setDbType] = useState<string | undefined>();
+  const [apiKey, setApiKey] = useState("");
+  const [uploadEndpoint, setUploadEndpoint] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
+
+  const loadConnections = async () => {
+    const { data, error } = await supabase
+      .from("external_databases")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Error loading connections", description: error.message });
+      return;
+    }
+    setConnections(data || []);
+  };
+
+  const handleAddDatabase = async () => {
+    if (!dbName || !dbType) {
+      toast({ title: "Missing information", description: "Name and Type are required." });
+      return;
+    }
+    setLoading(true);
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes?.user?.id;
+    const { data: firmId, error: firmErr } = await supabase.rpc("get_user_firm_id");
+    if (!userId || firmErr) {
+      toast({ title: "Auth error", description: "Please sign in and ensure your profile is set." });
+      setLoading(false);
+      return;
+    }
+    const { error } = await supabase.from("external_databases").insert({
+      name: dbName,
+      type: dbType,
+      api_key: apiKey || null,
+      upload_endpoint: uploadEndpoint || null,
+      firm_id: firmId,
+      created_by: userId,
+    });
+    if (error) {
+      toast({ title: "Failed to add", description: error.message });
+    } else {
+      toast({ title: "Database added", description: "Connection saved successfully." });
+      setDbName("");
+      setDbType(undefined);
+      setApiKey("");
+      setUploadEndpoint("");
+      await loadConnections();
+    }
+    setLoading(false);
+  };
+
+  const openUpload = (id: string) => {
+    setActiveConnectionId(id);
+    fileInputRef.current?.click();
+  };
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConnectionId) return;
+
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes?.user?.id;
+    if (!userId) {
+      toast({ title: "Not signed in", description: "Please sign in to upload." });
+      return;
+    }
+
+    const path = `${userId}/${Date.now()}_${file.name}`;
+    const { error: upErr } = await supabase.storage.from("database-uploads").upload(path, file, { upsert: true });
+
+    if (upErr) {
+      toast({ title: "Upload failed", description: upErr.message });
+      e.target.value = "";
+      setActiveConnectionId(null);
+      return;
+    }
+
+    const { error: forwardErr } = await supabase.functions.invoke("db-upload-relay", {
+      body: {
+        connectionId: activeConnectionId,
+        storagePath: path,
+        bucket: "database-uploads",
+        filename: file.name,
+        mimeType: file.type,
+      },
+    });
+
+    if (forwardErr) {
+      toast({ title: "Forwarding failed", description: forwardErr.message });
+    } else {
+      toast({ title: "File sent", description: "Your file was forwarded to the database." });
+    }
+
+    e.target.value = "";
+    setActiveConnectionId(null);
+  };
+
+  useEffect(() => {
+    loadConnections();
+  }, []);
+
+
+  const handleTestConnection = (dbId: string | number) => {
     toast({
       title: "Testing Connection",
       description: "Verifying database connectivity...",
@@ -99,6 +178,7 @@ const DatabaseSettings = () => {
 
   return (
     <div className="space-y-6">
+      <input type="file" ref={fileInputRef} className="hidden" onChange={onFileChange} />
       <Card className="bg-white/70 border-steel-blue-200">
         <CardHeader>
           <CardTitle className="text-steel-blue-800 flex items-center">
@@ -111,13 +191,13 @@ const DatabaseSettings = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {databases.map((db) => (
+            {connections.map((db) => (
               <div
                 key={db.id}
                 className="flex items-center justify-between p-4 border border-steel-blue-200 rounded-lg"
               >
                 <div className="flex items-center space-x-4">
-                  {db.type === "Custom Server" ? (
+                  {db.type === "custom" ? (
                     <Server className="h-8 w-8 text-steel-blue-500" />
                   ) : (
                     <Cloud className="h-8 w-8 text-steel-blue-500" />
@@ -135,16 +215,21 @@ const DatabaseSettings = () => {
                         </span>
                       </Badge>
                     </div>
-                    <div className="text-sm text-steel-blue-600 mt-1">
-                      {db.caseCount} cases • {db.documentsIndexed.toLocaleString()} documents
-                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-4">
                   <div className="text-right text-sm text-steel-blue-600">
-                    <div>Last sync: {db.lastSync}</div>
+                    <div>Last sync: {db.last_sync_at ? new Date(db.last_sync_at).toLocaleString() : "-"}</div>
                   </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openUpload(db.id)}
+                    className="border-steel-blue-300"
+                  >
+                    Upload File
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -224,12 +309,14 @@ const DatabaseSettings = () => {
                 id="dbName"
                 placeholder="Enter a name for this connection"
                 className="border-steel-blue-300 focus:border-primary"
+                value={dbName}
+                onChange={(e) => setDbName(e.target.value)}
               />
             </div>
 
             <div>
               <Label className="text-steel-blue-700">Database Type</Label>
-              <Select>
+              <Select value={dbType} onValueChange={setDbType}>
                 <SelectTrigger className="border-steel-blue-300">
                   <SelectValue placeholder="Select database type" />
                 </SelectTrigger>
@@ -250,12 +337,26 @@ const DatabaseSettings = () => {
                 type="password"
                 placeholder="Enter API key or connection details"
                 className="border-steel-blue-300 focus:border-primary"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
               />
             </div>
 
-            <Button className="w-full bg-primary hover:bg-primary/90">
+            <div>
+              <Label htmlFor="uploadEndpoint" className="text-steel-blue-700">Upload Endpoint URL</Label>
+              <Input
+                id="uploadEndpoint"
+                type="url"
+                placeholder="https://example.com/upload"
+                className="border-steel-blue-300 focus:border-primary"
+                value={uploadEndpoint}
+                onChange={(e) => setUploadEndpoint(e.target.value)}
+              />
+            </div>
+
+            <Button className="w-full bg-primary hover:bg-primary/90" onClick={handleAddDatabase} disabled={loading}>
               <Database className="mr-2 h-4 w-4" />
-              Add Database
+              {loading ? "Adding..." : "Add Database"}
             </Button>
           </CardContent>
         </Card>
