@@ -91,11 +91,22 @@ const DocumentGenerator = () => {
         title: "Document Generated Successfully",
         description: `Your ${template.file_type === 'docx' ? 'Word' : 'text'} document has been created using verified case file information.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('RAG generation error:', error);
+      let detail = '';
+      try {
+        detail = typeof error?.message === 'string' ? error.message : JSON.stringify(error);
+      } catch {}
+      const quota = (detail && (detail.includes('insufficient_quota') || detail.toLowerCase().includes('quota')));
+      setRagSteps(prev => [
+        ...prev,
+        quota ? 'OpenAI quota exceeded.' : (detail ? `Error: ${detail}` : 'Error during generation.'),
+      ]);
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your document",
+        description: quota
+          ? 'OpenAI quota exceeded. Add a funded key in Supabase secrets and try again.'
+          : (detail || "There was an error generating your document."),
         variant: "destructive"
       });
     } finally {
