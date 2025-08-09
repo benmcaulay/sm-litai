@@ -63,63 +63,44 @@ const DocumentGenerator = () => {
     setRagSteps([]);
     setGeneratedDoc(null);
 
-    // Simulate RAG process with realistic steps
-    const steps = [
-      "Searching case files for relevant documents...",
-      template.file_type === 'docx' ? "Processing Word template formatting..." : "Processing text template...",
-      "Analyzing case: " + query.split(" ").slice(-2).join(" "),
-      "Extracting key facts and dates...",
-      "Cross-referencing with legal precedents...",
-      template.file_type === 'docx' ? "Generating formatted Word document..." : "Generating text document...",
-      "Performing fact-checking and validation...",
-      "Finalizing document with proper formatting..."
-    ];
+    // RAG: Locate latest case file, extract context, and generate with GPT using server-side function
+    setRagSteps(prev => [
+      ...prev,
+      "Locating latest case file...",
+      template.file_type === 'docx' ? "Extracting text from .docx..." : "Preparing template context...",
+      "Generating answer with GPT...",
+    ]);
 
-    for (let i = 0; i < steps.length; i++) {
-      setTimeout(() => {
-        setRagSteps(prev => [...prev, steps[i]]);
-      }, i * 1000);
+    try {
+      const { data, error } = await supabase.functions.invoke('rag-generate', {
+        body: {
+          query,
+          templateId: selectedTemplate,
+        },
+      });
+
+      if (error) throw error;
+
+      setGeneratedDoc(data?.answer || '');
+      setRagSteps(prev => [
+        ...prev,
+        data?.source?.filename ? `Verified answer generated from ${data.source.filename}.` : 'Verified answer generated.'
+      ]);
+
+      toast({
+        title: "Document Generated Successfully",
+        description: `Your ${template.file_type === 'docx' ? 'Word' : 'text'} document has been created using verified case file information.`,
+      });
+    } catch (error) {
+      console.error('RAG generation error:', error);
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your document",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
     }
-
-    // Simulate document generation
-    setTimeout(async () => {
-      try {
-        if (template.file_type === 'docx' && template.file_path) {
-          // Process .docx template using edge function
-          const { data, error } = await supabase.functions.invoke('process-docx', {
-            body: {
-              action: 'generate',
-              filePath: template.file_path,
-              templateData: {
-                templateName: template.name,
-                userQuery: query
-              }
-            }
-          });
-
-          if (error) throw error;
-          setGeneratedDoc(data.content);
-        } else {
-          // Generate from text template or fallback
-          const mockDocument = generateMockDocument(selectedTemplate, query);
-          setGeneratedDoc(mockDocument);
-        }
-
-        setIsGenerating(false);
-        toast({
-          title: "Document Generated Successfully",
-          description: `Your ${template.file_type === 'docx' ? 'Word' : 'text'} document has been created using verified case file information.`,
-        });
-      } catch (error) {
-        console.error('Generation error:', error);
-        setIsGenerating(false);
-        toast({
-          title: "Generation Failed",
-          description: "There was an error generating your document",
-          variant: "destructive"
-        });
-      }
-    }, steps.length * 1000);
   };
 
   const generateMockDocument = (templateId: string, userQuery: string) => {

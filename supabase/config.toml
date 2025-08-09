@@ -6,3 +6,7 @@ verify_jwt = true
 [functions.process-docx]
 # default verify_jwt is true; keeping explicit for clarity
 verify_jwt = true
+
+[functions.rag-generate]
+verify_jwt = true
+
