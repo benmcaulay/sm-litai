@@ -94,13 +94,29 @@ const DocumentGenerator = () => {
     } catch (error: any) {
       console.error('RAG generation error:', error);
       let detail = '';
+      let status: number | undefined;
       try {
-        detail = typeof error?.message === 'string' ? error.message : JSON.stringify(error);
-      } catch {}
+        // Supabase FunctionsHttpError exposes response in context
+        const res = error?.context?.response as Response | undefined;
+        status = (res as any)?.status;
+        if (res) {
+          const text = await res.text();
+          try {
+            const json = JSON.parse(text);
+            detail = json?.error || json?.message || text;
+          } catch {
+            detail = text || error?.message;
+          }
+        } else {
+          detail = typeof error?.message === 'string' ? error.message : JSON.stringify(error);
+        }
+      } catch {
+        detail = typeof error?.message === 'string' ? error.message : '';
+      }
       const quota = (detail && (detail.includes('insufficient_quota') || detail.toLowerCase().includes('quota')));
       setRagSteps(prev => [
         ...prev,
-        quota ? 'OpenAI quota exceeded.' : (detail ? `Error: ${detail}` : 'Error during generation.'),
+        quota ? 'OpenAI quota exceeded.' : (detail ? `Error: ${detail}${status ? ` (status ${status})` : ''}` : 'Error during generation.'),
       ]);
       toast({
         title: "Generation Failed",
