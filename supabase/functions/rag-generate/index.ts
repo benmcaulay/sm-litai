@@ -32,6 +32,9 @@ serve(async (req) => {
       Deno.env.get("OPENAI") ||
       "";
 
+    // Log presence (not the value) to help diagnose missing secret issues
+    console.log("rag-generate: OPENAI_API_KEY present:", Boolean(openAIApiKey));
+
     if (!openAIApiKey) {
       return new Response(
         JSON.stringify({ error: "Missing OpenAI API key. Please set OPENAI_API_KEY in Supabase secrets." }),
