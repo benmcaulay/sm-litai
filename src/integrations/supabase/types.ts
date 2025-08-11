@@ -176,6 +176,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      firm_exists: {
+        Args: { p_domain: string }
+        Returns: boolean
+      }
       get_user_firm_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -187,6 +191,13 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      search_firms: {
+        Args: { p_query: string; p_limit?: number }
+        Returns: {
+          id: string
+          name: string
+        }[]
       }
     }
     Enums: {

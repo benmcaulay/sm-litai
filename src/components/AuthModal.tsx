@@ -46,12 +46,14 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   useEffect(() => {
     const loadFirms = async () => {
       if (firmName.length > 1) {
-        const { data } = await supabase
-          .from("firms")
-          .select("id, name")
-          .ilike("name", `%${firmName}%`)
-          .limit(5);
-        setFirms(data || []);
+        const { data, error } = await supabase
+          .rpc('search_firms', { p_query: firmName, p_limit: 5 });
+        if (error) {
+          console.error('search_firms rpc error:', error);
+          setFirms([]);
+        } else {
+          setFirms((data as Array<{ id: string; name: string }> ) || []);
+        }
       } else {
         setFirms([]);
       }

@@ -36,13 +36,15 @@ export const FirmRegistrationModal = ({ isOpen, onClose }: FirmRegistrationModal
       const domain = email.split('@')[1];
       
       // Check if firm with this domain already exists
-      const { data: existingFirm } = await supabase
-        .from("firms")
-        .select("*")
-        .eq("domain", domain)
-        .maybeSingle();
+      const { data: existsData, error: existsError } = await supabase
+        .rpc('firm_exists', { p_domain: domain });
 
-      if (existingFirm) {
+      if (existsError) {
+        console.error('Domain check error:', existsError);
+      }
+
+
+      if (existsData === true) {
         toast({
           title: "Firm Already Exists",
           description: "A firm with this email domain is already registered.",
