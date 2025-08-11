@@ -2,12 +2,28 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
+
+const RecoveryRedirector = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const hash = location.hash || window.location.hash || '';
+    const search = location.search || '';
+    const hasCode = new URLSearchParams(search).get('code');
+    const isRecovery = (hash.includes('type=recovery') || Boolean(hasCode));
+    if (isRecovery && location.pathname !== '/reset') {
+      navigate(`/reset${search}${hash}`, { replace: true });
+    }
+  }, [location, navigate]);
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -15,6 +31,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <RecoveryRedirector />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/reset" element={<ResetPassword />} />
