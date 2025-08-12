@@ -217,7 +217,7 @@ serve(async (req) => {
       .map((c) => `=== Source: ${c.filename} ===\n${c.text.slice(0, perFile)}`)
       .join("\n\n");
 
-    // Default outline
+    // Default outline (legacy; only used if no database style authority is found)
     const defaultOutline = [
       "Title",
       "Header",
@@ -230,7 +230,34 @@ serve(async (req) => {
       "Signature",
     ];
 
-    // Optional firm hints from DB (table) — used only if header fields are missing in database files
+    // TEMPLATE content (optional, used for guidance or fallback formatting)
+    let templateText = "";
+    try {
+      if (typeof (template as any).content === "string" && (template as any).content.trim().length > 0) {
+        templateText = String((template as any).content).slice(0, 16000);
+      } else if ((template as any).file_path) {
+        const { data: tplData } = await supabase.storage.from("templates").download((template as any).file_path);
+        if (tplData) {
+          const buf = await tplData.arrayBuffer();
+          templateText = await extractAnyText((template as any).file_path, buf);
+        }
+      }
+    } catch (_e) {
+      console.warn("Template text extraction failed");
+    }
+    const TEMPLATE_BLOCK = `=== TEMPLATE CONTENT ===\n${templateText || "[No template text available]"}`;
+
+    // Prepare DATABASE blocks and choose style authority (largest readable file)
+    const DATABASE_BLOCKS = contexts
+      .map((c) => `=== DATABASE SOURCE: ${c.filename} ===\n${c.text.slice(0, perFile)}`)
+      .join("\n\n");
+
+    const styleAuthority = contexts.slice().sort((a, b) => b.chars - a.chars)[0] || null;
+    const STYLE_BLOCK = styleAuthority
+      ? `=== DATABASE STYLE AUTHORITY: ${styleAuthority.filename} ===\n${styleAuthority.text.slice(0, Math.min(styleAuthority.text.length, 12000))}`
+      : "";
+
+    
     let firmDbHints: { name?: string; domain?: string } | null = null;
     try {
       const { data: firmIdData } = await supabase.rpc("get_user_firm_id");
@@ -313,22 +340,15 @@ serve(async (req) => {
         model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
-          { role: "system", content: "You are a legal document assistant. Output plain text without code fences." },
-          { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
-          {
-            role: "system",
-            content:
-              `Authoritative data source: DATABASE FILES (Sources).\nRules for Header: Use firm details extracted from database files (firm_header below) as PRIMARY source. If a field is missing, then and only then use Firm DB hints. If still unknown, write [TBD]. Do not invent. Also, include these details in the Header section where they fit into the template. Append [source: firms-table] when using DB hints.`,
-          },
-          {
-            role: "system",
-            content:
-              `Output contract:\n1) Start with a Title line (#).\n2) Immediately include a Header block (## Header) with: Firm Name, Address, Phone, Email, Website.\n3) Follow sections in order: ${defaultOutline.join(" > ")}.\n4) Use heading markers: # (Title), ## (top-level), ### (subsections).\n5) After any sentence relying on a Source, append [source: filename.ext]; multiple filenames separated by commas.\n6) Use ONLY verifiable facts from Sources; otherwise mark [TBD].\n7) Maintain a professional legal tone.`,
-          },
+          { role: "system", content: "You are a legal document assistant. Output plain text only. Do not use markdown headings, code fences, or additional labels." },
+          { role: "system", content: "Document roles:\n- TEMPLATE: general guidance ONLY for content when database lacks a section.\n- DATABASE: authoritative facts and primary formatting source.\n- DATABASE STYLE AUTHORITY: the single database document whose formatting MUST be exactly copied (intro, outro, paragraph and line spacing, blank lines, numbering, indentation, section order and wording)." },
+          { role: "system", content: STYLE_BLOCK || "No database style authority available. If so, mirror the TEMPLATE formatting as a fallback." },
+          { role: "system", content: TEMPLATE_BLOCK },
+          { role: "system", content: `DATABASE SOURCES (truncated):\n${DATABASE_BLOCKS}` },
           { role: "system", content: `Firm header from database files: ${JSON.stringify(firmHeaderFromSources)}` },
           { role: "system", content: `Firm DB hints (fallback only): ${JSON.stringify(firmDbHints)}` },
           { role: "system", content: `Structured facts (JSON):\n${analysisText}` },
-          { role: "system", content: `Sources (truncated):\n${combined}` },
+          { role: "system", content: "Formatting instructions:\n- If a DATABASE STYLE AUTHORITY is provided, EXACTLY copy its intro, outro, line breaks, blank lines, paragraph spacing, numbering/bullets, indentation, and section order/wording.\n- Replace only variable factual content; preserve all format markers and spacing.\n- If a value is unknown, keep the existing placeholder if present; otherwise write [TBD] while preserving spacing.\n- Do not add citations, bracketed notes, hashes (#), or headings not present in the style authority.\n- Output must be plain text with the exact spacing and blank lines as the style authority.\n- If no DATABASE STYLE AUTHORITY exists, follow the TEMPLATE format instead. Never mix styles." },
           { role: "user", content: query },
         ],
       }),
