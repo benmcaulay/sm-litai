@@ -20,6 +20,12 @@ interface DbDoc {
   created_at: string;
 }
 
+interface CaseFolder {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 const formatBytes = (bytes: number) => {
   if (!bytes || bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -33,6 +39,7 @@ const DatabaseDocuments = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [docs, setDocs] = useState<DbDoc[]>([]);
+  const [folders, setFolders] = useState<CaseFolder[]>([]);
   const [dbInfo, setDbInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -49,14 +56,20 @@ const DatabaseDocuments = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const [{ data: db, error: dbErr }, { data, error }] = await Promise.all([
+        const [dbRes, docsRes, casesRes] = await Promise.all([
           supabase.from('external_databases').select('*').eq('id', id).maybeSingle(),
-          (supabase as any).from('database_documents').select('*').eq('external_database_id', id).order('created_at', { ascending: false })
+          (supabase as any).from('database_documents').select('*').eq('external_database_id', id).order('created_at', { ascending: false }),
+          (supabase as any).from('case_files').select('id, name, created_at').order('created_at', { ascending: true })
         ]);
+        const { data: db, error: dbErr } = dbRes as any;
+        const { data, error } = docsRes as any;
+        const { data: cases, error: casesErr } = casesRes as any;
         if (dbErr) console.warn(dbErr);
         setDbInfo(db);
         if (error) console.warn(error);
         setDocs((data || []) as any);
+        if (casesErr) console.warn(casesErr);
+        setFolders((cases || []) as any);
       } finally {
         setLoading(false);
       }
@@ -114,6 +127,27 @@ const DatabaseDocuments = () => {
     const next = (doc.tags || []).filter(x => x !== t);
     const { error } = await (supabase as any).from('database_documents').update({ tags: next }).eq('id', doc.id);
     if (!error) setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, tags: next } : d));
+  };
+
+  const handleDropOnFolder = async (folder: CaseFolder, doc: DbDoc) => {
+    const fileUserId = (doc.storage_path || '').split('/')[0] || (user?.id || '');
+    const newPath = `${fileUserId}/cases/${folder.id}/${doc.filename}`;
+    if (newPath === doc.storage_path) return;
+    try {
+      const { error: mvErr } = await supabase.storage.from('database-uploads').move(doc.storage_path, newPath);
+      if (mvErr) {
+        toast({ title: 'Move failed', description: mvErr.message, variant: 'destructive' });
+        return;
+      }
+      const { error } = await (supabase as any).from('database_documents').update({ storage_path: newPath }).eq('id', doc.id);
+      if (error) {
+        toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+      }
+      setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, storage_path: newPath } : d));
+      toast({ title: 'Moved', description: `Moved to case: ${folder.name}` });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Could not move file', variant: 'destructive' });
+    }
   };
 
   const handleCreateCaseFolder = async () => {
@@ -186,48 +220,70 @@ const DatabaseDocuments = () => {
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {filtered.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-medium flex items-center gap-2">
-                      <File className="h-4 w-4 text-steel-blue-600" /> {d.filename}
-                    </TableCell>
-                    <TableCell>{formatBytes(d.size_bytes)}</TableCell>
-                    <TableCell className="text-sm text-steel-blue-700">{d.storage_path}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        {(d.tags || []).map(t => (
-                          <Badge key={t} variant="secondary" className="bg-steel-blue-100 text-steel-blue-700 cursor-pointer" onClick={()=>handleRemoveTag(d,t)}>
-                            <Tag className="h-3 w-3 mr-1" /> {t} ×
-                          </Badge>
-                        ))}
-                        <div className="flex items-center gap-2">
-                          <Input
-                            placeholder="Add tag"
-                            value={tagEdit[d.id] || ''}
-                            onChange={(e)=>setTagEdit(prev=>({...prev,[d.id]:e.target.value}))}
-                            className="h-8 w-28 border-steel-blue-300"
-                          />
-                          <Button size="sm" variant="outline" className="h-8 border-steel-blue-300" onClick={()=>handleAddTag(d)}>Add</Button>
+                <TableBody>
+                  {folders.map((f) => (
+                    <TableRow
+                      key={`folder-${f.id}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const draggedId = e.dataTransfer.getData('text/dbdoc-id');
+                        const doc = docs.find((d) => d.id === draggedId);
+                        if (doc) handleDropOnFolder(f, doc);
+                      }}
+                    >
+                      <TableCell className="font-medium flex items-center gap-2">
+                        <Folder className="h-4 w-4 text-steel-blue-600" /> {f.name}
+                      </TableCell>
+                      <TableCell>—</TableCell>
+                      <TableCell className="text-sm text-steel-blue-700">cases/{f.id}/</TableCell>
+                      <TableCell>
+                        <div className="text-sm text-steel-blue-600">Drop files here</div>
+                      </TableCell>
+                      <TableCell className="text-right"></TableCell>
+                    </TableRow>
+                  ))}
+                  {filtered.map((d) => (
+                    <TableRow key={d.id} draggable onDragStart={(e) => e.dataTransfer.setData('text/dbdoc-id', d.id)}>
+                      <TableCell className="font-medium flex items-center gap-2">
+                        <File className="h-4 w-4 text-steel-blue-600" /> {d.filename}
+                      </TableCell>
+                      <TableCell>{formatBytes(d.size_bytes)}</TableCell>
+                      <TableCell className="text-sm text-steel-blue-700">{d.storage_path}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {(d.tags || []).map(t => (
+                            <Badge key={t} variant="secondary" className="bg-steel-blue-100 text-steel-blue-700 cursor-pointer" onClick={()=>handleRemoveTag(d,t)}>
+                              <Tag className="h-3 w-3 mr-1" /> {t} ×
+                            </Badge>
+                          ))}
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder="Add tag"
+                              value={tagEdit[d.id] || ''}
+                              onChange={(e)=>setTagEdit(prev=>({...prev,[d.id]:e.target.value}))}
+                              className="h-8 w-28 border-steel-blue-300"
+                            />
+                            <Button size="sm" variant="outline" className="h-8 border-steel-blue-300" onClick={()=>handleAddTag(d)}>Add</Button>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button size="sm" variant="outline" className="border-steel-blue-300" onClick={()=>handleRenameMove(d)}>
-                        <Edit className="h-4 w-4 mr-1" /> Rename/Move
-                      </Button>
-                      <Button size="sm" variant="outline" className="border-red-300 text-red-700" onClick={()=>handleDelete(d)}>
-                        <Trash2 className="h-4 w-4 mr-1" /> Delete
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-steel-blue-600">No documents found.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="outline" className="border-steel-blue-300" onClick={()=>handleRenameMove(d)}>
+                          <Edit className="h-4 w-4 mr-1" /> Rename/Move
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-red-300 text-red-700" onClick={()=>handleDelete(d)}>
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filtered.length === 0 && folders.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-steel-blue-600">No documents found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
             </Table>
           </CardContent>
         </Card>
