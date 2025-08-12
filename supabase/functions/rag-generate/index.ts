@@ -72,7 +72,7 @@ serve(async (req) => {
       );
     }
 
-    // Find latest uploaded case file for this user
+    // Gather recent uploaded case files for this user (prefer PDFs and 'complain' files)
     const { data: objects, error: listErr } = await supabase.storage
       .from("database-uploads")
       .list(userId, { limit: 100, sortBy: { column: "name", order: "desc" } });
@@ -92,56 +92,137 @@ serve(async (req) => {
       );
     }
 
-    // Pick the most recent by name (Date.now prefix ensures correct order)
-    const latest = objects[0];
-    const storagePath = `${userId}/${latest.name}`;
+    // Helper extractors
+    const extractDocxText = (buf: ArrayBuffer): string => {
+      try {
+        const zip = new PizZip(buf);
+        const documentXml = zip.file("word/document.xml");
+        if (!documentXml) return "";
+        const xmlContent = documentXml.asText();
+        const textMatches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        return textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").replace(/\s+/g, " ").trim();
+      } catch (e) {
+        console.warn("DOCX parse failed", e);
+        return "";
+      }
+    };
 
-    const { data: fileData, error: dlErr } = await supabase.storage
-      .from("database-uploads")
-      .download(storagePath);
+    const extractPdfText = (buf: ArrayBuffer): string => {
+      // Very lightweight, best-effort text extraction from PDF content streams
+      try {
+        const bytes = new Uint8Array(buf);
+        let s = "";
+        for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+        const matches = s.match(/\((?:\\\)|\\\(|\\n|\\r|\\t|[^()])+\)/g) || [];
+        const decoded = matches
+          .map((m) => m.slice(1, -1)
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\t/g, "\t")
+            .replace(/\\\(/g, "(")
+            .replace(/\\\)/g, ")")
+            .replace(/\\\\/g, "\\")
+          )
+          .join(" ");
+        return decoded.replace(/\s+/g, " ").trim();
+      } catch (e) {
+        console.warn("PDF parse failed", e);
+        return "";
+      }
+    };
 
-    if (dlErr || !fileData) {
-      console.error("Storage download error", dlErr);
+    const extractAnyText = (name: string, buf: ArrayBuffer): string => {
+      const lower = name.toLowerCase();
+      if (lower.endsWith(".docx")) return extractDocxText(buf);
+      if (lower.endsWith(".pdf")) return extractPdfText(buf);
+      if (lower.endsWith(".txt") || lower.endsWith(".md")) return new TextDecoder().decode(buf).toString();
+      return new TextDecoder().decode(buf).toString();
+    };
+
+    // Choose up to 3 priority files: prefer names containing 'complain' or PDFs
+    const sorted = [...objects].sort((a, b) => (b.name.localeCompare(a.name)));
+    const preferred = sorted.filter((o) => /complain/i.test(o.name) || /\.pdf$/i.test(o.name));
+    const fallback = sorted.filter((o) => !preferred.includes(o));
+    const candidates = [...preferred, ...fallback].slice(0, 3);
+
+    const contexts: { filename: string; text: string; storagePath: string }[] = [];
+
+    for (const obj of candidates) {
+      const storagePath = `${userId}/${obj.name}`;
+      const { data: fileData, error: dlErr } = await supabase.storage
+        .from("database-uploads")
+        .download(storagePath);
+      if (dlErr || !fileData) {
+        console.warn("Download failed for", storagePath, dlErr);
+        continue;
+      }
+      const buf = await fileData.arrayBuffer();
+      let text = extractAnyText(obj.name, buf);
+      if (!text || text.trim().length === 0) {
+        text = `No readable text extracted from ${obj.name}.`;
+      }
+      contexts.push({ filename: obj.name, text, storagePath });
+    }
+
+    if (contexts.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Failed to download latest case file" }),
+        JSON.stringify({ error: "No readable content extracted from uploaded files." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Build combined, size-limited context
+    const MAX_TOTAL = 16000;
+    const perFile = Math.floor(MAX_TOTAL / contexts.length);
+    const combined = contexts
+      .map((c) => `=== Source: ${c.filename} ===\n${c.text.slice(0, perFile)}`)
+      .join("\n\n");
+
+
+    // Phase 1: Initial evaluation — extract structured facts from all sources
+    const analysisRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openAIApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        messages: [
+          {
+            role: "system",
+            content: "You are a legal analyst. Extract structured facts from the provided case documents. Return STRICT JSON only.",
+          },
+          {
+            role: "user",
+            content:
+              `Analyze the following sources and extract the key case facts as JSON with this shape:\n\n` +
+              `{"case_caption":"string","parties":{"plaintiff":["..."],"defendant":["..."]},` +
+              `"claims":["..."],"key_dates":[{"label":"","date":""}],` +
+              `"venue":"","docket_number":"","monetary_amounts":[{"label":"","amount":""}],` +
+              `"other_facts":["..."],"source_filenames":["..."]}` +
+              `\n\nOnly include facts present in sources. If unknown, omit field.\n\n` +
+              combined,
+          },
+        ],
+      }),
+    });
+
+    if (!analysisRes.ok) {
+      const errText = await analysisRes.text();
+      console.error("OpenAI analysis error", errText);
+      return new Response(
+        JSON.stringify({ error: "OpenAI analysis failed", details: errText }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const buf = await fileData.arrayBuffer();
+    const analysisJson = await analysisRes.json();
+    const analysisText: string = analysisJson?.choices?.[0]?.message?.content || "{}";
 
-    // Extract text from the file
-    let contextText = "";
-    const lower = latest.name.toLowerCase();
-    try {
-      if (lower.endsWith(".docx")) {
-        const zip = new PizZip(buf);
-        const documentXml = zip.file("word/document.xml");
-        if (documentXml) {
-          const xmlContent = documentXml.asText();
-          const textMatches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
-          contextText = textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").replace(/\s+/g, " ").trim();
-        }
-      } else if (lower.endsWith(".txt") || lower.endsWith(".md")) {
-        contextText = new TextDecoder().decode(buf).toString();
-      } else {
-        // Best-effort text decode
-        contextText = new TextDecoder().decode(buf).toString();
-      }
-    } catch (e) {
-      console.warn("Context extraction failed, falling back to raw text:", e);
-      contextText = new TextDecoder().decode(buf).toString();
-    }
-
-    if (!contextText || contextText.trim().length === 0) {
-      contextText = `No readable text extracted from ${latest.name}.`;
-    }
-
-    const maxContext = 12000; // keep prompt within limits
-    const trimmedContext = contextText.slice(0, maxContext);
-
-    // Call OpenAI to generate an answer using the context and template
-    const completionRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Phase 2: RAG-verified generation using template + analysis + sources
+    const generationRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${openAIApiKey}`,
@@ -151,34 +232,37 @@ serve(async (req) => {
         model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
+          { role: "system", content: "You are a legal document assistant." },
+          { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
           {
             role: "system",
             content:
-              "You are a legal document assistant. Only use facts from the provided case context. If the context is insufficient, reply: 'Insufficient context to answer.' Produce clear, structured, professional output.",
+              "Use only facts that can be verified in the provided Sources. If a claim cannot be verified, mark it as [TBD] and do not fabricate. Maintain professional tone.",
           },
-          { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
-          { role: "system", content: `Case context (truncated):\n${trimmedContext}` },
+          { role: "system", content: `Structured facts extracted (JSON):\n${analysisText}` },
+          { role: "system", content: `Sources (truncated):\n${combined}` },
           { role: "user", content: query },
         ],
       }),
     });
 
-    if (!completionRes.ok) {
-      const errText = await completionRes.text();
-      console.error("OpenAI error", errText);
+    if (!generationRes.ok) {
+      const errText = await generationRes.text();
+      console.error("OpenAI generation error", errText);
       return new Response(
         JSON.stringify({ error: "OpenAI request failed", details: errText }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const completionJson = await completionRes.json();
-    const answer = completionJson?.choices?.[0]?.message?.content || "";
+    const generationJson = await generationRes.json();
+    const answer = generationJson?.choices?.[0]?.message?.content || "";
 
     return new Response(
       JSON.stringify({
         answer,
-        source: { bucket: "database-uploads", path: storagePath, filename: latest.name },
+        analysis: analysisText,
+        sources: contexts.map((c) => ({ bucket: "database-uploads", path: c.storagePath, filename: c.filename })),
         template: { id: template.id, name: template.name },
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

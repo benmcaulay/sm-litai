@@ -93,10 +93,10 @@ const DocumentGenerator = () => {
 
       if (error) throw error;
 
-      setGeneratedDoc(data?.answer || '');
+      const sourceLabel = data?.source?.filename || (Array.isArray(data?.sources) && data.sources[0]?.filename);
       setRagSteps(prev => [
         ...prev,
-        data?.source?.filename ? `Verified answer generated from ${data.source.filename}.` : 'Verified answer generated.'
+        sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.'
       ]);
 
       // Prepare downloadable file matching template type
