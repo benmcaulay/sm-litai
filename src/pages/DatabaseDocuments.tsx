@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Folder, File, Trash2, Edit, Tag, ArrowLeft } from "lucide-react";
+import { Folder, File, Trash2, Edit, Tag, ArrowLeft, Plus } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface DbDoc {
   id: string;
@@ -30,13 +31,14 @@ const formatBytes = (bytes: number) => {
 const DatabaseDocuments = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [docs, setDocs] = useState<DbDoc[]>([]);
   const [dbInfo, setDbInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [prefix, setPrefix] = useState("");
   const [tagEdit, setTagEdit] = useState<{[id:string]: string}>({});
+  const { toast } = useToast();
 
   useEffect(() => {
     document.title = dbInfo?.name ? `${dbInfo.name} Documents – LitAI` : 'Database Documents – LitAI';
@@ -114,6 +116,27 @@ const DatabaseDocuments = () => {
     if (!error) setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, tags: next } : d));
   };
 
+  const handleCreateCaseFolder = async () => {
+    const name = prompt('New case name:')?.trim();
+    if (!name) return;
+    try {
+      const { data: inserted, error } = await (supabase as any)
+        .from('case_files')
+        .insert({ name, firm_id: profile?.firm_id, created_by: user?.id, source: 'database', status: 'indexed' })
+        .select('id, name')
+        .maybeSingle();
+      if (error || !inserted) throw error || new Error('Failed to create case');
+      const keepPath = `${user?.id}/cases/${inserted.id}/.keep`;
+      const { error: upErr } = await supabase.storage
+        .from('database-uploads')
+        .upload(keepPath, new Blob(["case folder"]), { contentType: 'text/plain', upsert: true });
+      if (upErr) console.warn('Placeholder upload failed:', upErr.message);
+      toast({ title: 'Case created', description: `Folder ready: cases/${inserted.id}` });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Could not create case', variant: 'destructive' });
+    }
+  };
+
   if (profile?.role !== 'admin') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-steel-blue-50 to-steel-blue-100">
@@ -144,9 +167,14 @@ const DatabaseDocuments = () => {
             <CardDescription className="text-steel-blue-600">Rename, move, tag, and delete files</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-3 mb-4">
-              <Input placeholder="Search by name or path" value={search} onChange={(e)=>setSearch(e.target.value)} className="border-steel-blue-300" />
-              <Input placeholder="Folder prefix (e.g. cases/123)" value={prefix} onChange={(e)=>setPrefix(e.target.value)} className="border-steel-blue-300" />
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 mb-4 justify-between">
+              <div className="flex-1 flex flex-col md:flex-row gap-3">
+                <Input placeholder="Search by name or path" value={search} onChange={(e)=>setSearch(e.target.value)} className="border-steel-blue-300" />
+                <Input placeholder="Folder prefix (e.g. userId/cases/CASE_ID)" value={prefix} onChange={(e)=>setPrefix(e.target.value)} className="border-steel-blue-300" />
+              </div>
+              <Button onClick={handleCreateCaseFolder} variant="outline" className="border-steel-blue-300">
+                <Plus className="h-4 w-4 mr-2" /> New Case Folder (Admin)
+              </Button>
             </div>
             <Table>
               <TableHeader>

@@ -92,7 +92,7 @@ const DocumentGenerator = () => {
     if (download?.url) URL.revokeObjectURL(download.url);
     setDownload(null);
 
-    // RAG: Locate latest case file, extract context, and generate with GPT using server-side function
+    // RAG: Locate case files, extract context, and generate with GPT using server-side function
     setRagSteps(prev => [
       ...prev,
       `Using case: ${selectedCaseObj?.name || 'Selected case'}`,

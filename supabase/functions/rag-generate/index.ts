@@ -42,13 +42,14 @@ serve(async (req) => {
       );
     }
 
-    const { query, templateId } = await req.json();
-    if (!query || !templateId) {
-      return new Response(JSON.stringify({ error: "Missing query or templateId" }), {
+    const { query, templateId, caseId, caseName } = await req.json();
+    if (!templateId) {
+      return new Response(JSON.stringify({ error: "Missing templateId" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // query is optional now (special instructions)
 
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userRes?.user) {
@@ -73,10 +74,12 @@ serve(async (req) => {
       });
     }
 
-    // List uploaded files for this user ("database files")
+    // Determine listing base: either a specific case folder or the user's root folder
+    const basePrefix = caseId ? `${userId}/cases/${caseId}` : `${userId}`;
+
     const { data: objects, error: listErr } = await supabase.storage
       .from("database-uploads")
-      .list(userId, { limit: 100, sortBy: { column: "name", order: "desc" } });
+      .list(basePrefix, { limit: 100, sortBy: { column: "name", order: "desc" } });
 
     if (listErr) {
       console.error("Storage list error", listErr);
@@ -88,7 +91,7 @@ serve(async (req) => {
 
     if (!objects || objects.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No uploaded database files found. Please upload files in Database Connections." }),
+        JSON.stringify({ error: caseId ? "No files found in the selected case folder. Please upload case documents in Database Connections." : "No uploaded database files found. Please upload files in Database Connections." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -214,7 +217,7 @@ serve(async (req) => {
     // Download and extract text
     await Promise.all(
       candidates.map(async (obj) => {
-        const storagePath = `${userId}/${obj.name}`;
+        const storagePath = `${basePrefix}/${obj.name}`;
         const { data: fileData, error: dlErr } = await supabase.storage
           .from("database-uploads")
           .download(storagePath);
@@ -377,7 +380,7 @@ serve(async (req) => {
           { role: "system", content: `Firm DB hints (fallback only): ${JSON.stringify(firmDbHints)}` },
           { role: "system", content: `Structured facts (JSON):\n${analysisText}` },
           { role: "system", content: "Formatting instructions:\n- If a DATABASE STYLE AUTHORITY is provided, EXACTLY copy its intro, outro, line breaks, blank lines, paragraph spacing, numbering/bullets, indentation, and section order/wording.\n- Replace only variable factual content; preserve all format markers and spacing.\n- If a value is unknown, keep the existing placeholder if present; otherwise write [TBD] while preserving spacing.\n- Do not add citations, bracketed notes, hashes (#), or headings not present in the style authority.\n- Output must be plain text with the exact spacing and blank lines as the style authority.\n- If no DATABASE STYLE AUTHORITY exists, follow the TEMPLATE format instead. Never mix styles." },
-          { role: "user", content: query },
+          { role: "user", content: query || "Generate the document strictly following the template and database sources." },
         ],
       }),
     });
@@ -401,6 +404,7 @@ serve(async (req) => {
         firm_header: firmHeaderFromSources,
         fact_citations: factCitations,
         outline_used: defaultOutline,
+        case: caseId ? { id: caseId, name: caseName || null } : null,
         sources: contexts.map((c) => ({ bucket: "database-uploads", path: c.storagePath, filename: c.filename })),
         template: { id: template.id, name: template.name, file_type: template.file_type || "text" },
         file_selection_count: contexts.length,
