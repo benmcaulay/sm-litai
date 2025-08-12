@@ -10,15 +10,21 @@ import { Switch } from "@/components/ui/switch";
 import { Database, Server, Key, RefreshCw, CheckCircle, AlertCircle, HardDrive, Cloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 const DatabaseSettings = () => {
   const [connectionStatus, setConnectionStatus] = useState("connected");
   const [autoSync, setAutoSync] = useState(true);
   const [lastSync, setLastSync] = useState("2024-01-16 09:30 AM");
   const { toast } = useToast();
+  const { profile } = useAuth();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Dashboard stats for Storage & Indexing
+  const [caseFileCount, setCaseFileCount] = useState<number>(0);
+  const [documentCount, setDocumentCount] = useState<number>(0);
+  const [loadingStats, setLoadingStats] = useState<boolean>(false);
   const [dbName, setDbName] = useState("");
   const [dbType, setDbType] = useState<string | undefined>();
   const [apiKey, setApiKey] = useState("");
@@ -124,6 +130,36 @@ const DatabaseSettings = () => {
     loadConnections();
   }, []);
 
+  // Stats helpers
+  const formatNumber = (n: number) => new Intl.NumberFormat().format(n || 0);
+
+  const fetchStats = async () => {
+    if (!profile?.firm_id) return;
+    setLoadingStats(true);
+    try {
+      const [casesRes, docsRes] = await Promise.all([
+        supabase
+          .from('case_files')
+          .select('id', { count: 'exact', head: true })
+          .eq('firm_id', profile.firm_id)
+          .eq('status', 'indexed'),
+        supabase
+          .from('generated_documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('firm_id', profile.firm_id),
+      ]);
+      if (casesRes.error) console.warn('Case files count error:', casesRes.error);
+      if (docsRes.error) console.warn('Generated documents count error:', docsRes.error);
+      setCaseFileCount(casesRes.count || 0);
+      setDocumentCount(docsRes.count || 0);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, [profile?.firm_id]);
 
   const handleTestConnection = (dbId: string | number) => {
     toast({
@@ -371,18 +407,18 @@ const DatabaseSettings = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-steel-blue-800">24.7 GB</div>
-              <div className="text-sm text-steel-blue-600">Total Indexed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-steel-blue-800">2,595</div>
-              <div className="text-sm text-steel-blue-600">Active Cases</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-steel-blue-800">28,011</div>
-              <div className="text-sm text-steel-blue-600">Documents Indexed</div>
-            </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-steel-blue-800">—</div>
+                <div className="text-sm text-steel-blue-600">Total Indexed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(caseFileCount)}</div>
+                <div className="text-sm text-steel-blue-600">Active Cases</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(documentCount)}</div>
+                <div className="text-sm text-steel-blue-600">Documents Indexed</div>
+              </div>
           </div>
         </CardContent>
       </Card>
