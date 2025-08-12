@@ -160,9 +160,9 @@ const DatabaseSettings = () => {
       setCaseFileCount(casesRes.count || 0);
       setDocumentCount(docsRes.count || 0);
 
-      const { data: usageBytes, error: usageErr } = await supabase.rpc('get_firm_storage_usage_bytes', { bucket: 'database-uploads' });
+      const { data: usageBytes, error: usageErr } = await (supabase as any).rpc('get_firm_storage_usage_bytes', { bucket: 'database-uploads' });
       if (usageErr) console.warn('Storage usage error:', usageErr);
-      setTotalBytes(usageBytes || 0);
+      setTotalBytes(Number(usageBytes || 0));
     } finally {
       setLoadingStats(false);
     }
@@ -417,9 +417,9 @@ const DatabaseSettings = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-steel-blue-800">—</div>
+                <div className="text-2xl font-bold text-steel-blue-800">{formatBytes(totalBytes)}</div>
                 <div className="text-sm text-steel-blue-600">Total Indexed</div>
               </div>
               <div className="text-center">

@@ -249,6 +249,10 @@ export type Database = {
         Args: { p_domain: string }
         Returns: boolean
       }
+      get_firm_storage_usage_bytes: {
+        Args: { bucket?: string }
+        Returns: number
+      }
       get_user_firm_id: {
         Args: Record<PropertyKey, never>
         Returns: string
