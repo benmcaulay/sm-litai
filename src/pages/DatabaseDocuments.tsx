@@ -44,6 +44,7 @@ const DatabaseDocuments = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [prefix, setPrefix] = useState("");
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [tagEdit, setTagEdit] = useState<{[id:string]: string}>({});
   const { toast } = useToast();
 
@@ -80,11 +81,17 @@ const DatabaseDocuments = () => {
   const filtered = useMemo(() => {
     const s = search.toLowerCase();
     const p = prefix;
+    const inCurrentView = (d: DbDoc) => {
+      const inAnyCase = d.storage_path.includes('/cases/');
+      if (currentFolderId) return d.storage_path.includes(`/cases/${currentFolderId}/`);
+      return !inAnyCase; // root view shows only files not inside any case folder
+    };
     return docs.filter(d =>
+      inCurrentView(d) &&
       (!s || d.filename.toLowerCase().includes(s) || d.storage_path.toLowerCase().includes(s)) &&
       (!p || d.storage_path.startsWith(p))
     );
-  }, [docs, search, prefix]);
+  }, [docs, search, prefix, currentFolderId]);
 
   const handleDelete = async (doc: DbDoc) => {
     if (!confirm(`Delete ${doc.filename}? This cannot be undone.`)) return;
@@ -166,6 +173,7 @@ const DatabaseDocuments = () => {
         .upload(keepPath, new Blob(["case folder"]), { contentType: 'text/plain', upsert: true });
       if (upErr) console.warn('Placeholder upload failed:', upErr.message);
       toast({ title: 'Case created', description: `Folder ready: cases/${inserted.id}` });
+      setFolders((prev) => [...prev, { id: inserted.id, name: inserted.name, created_at: new Date().toISOString() } as CaseFolder]);
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Could not create case', variant: 'destructive' });
     }
@@ -193,7 +201,14 @@ const DatabaseDocuments = () => {
           <Button variant="outline" className="border-steel-blue-300" onClick={() => navigate('/')}> 
             <ArrowLeft className="h-4 w-4 mr-2" /> Back
           </Button>
-          <h1 className="text-3xl font-bold text-steel-blue-800">{dbInfo?.name || 'Database'} Documents</h1>
+          {currentFolderId && (
+            <Button variant="outline" className="border-steel-blue-300" onClick={() => setCurrentFolderId(null)}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Folders
+            </Button>
+          )}
+          <h1 className="text-3xl font-bold text-steel-blue-800">
+            {dbInfo?.name || 'Database'} Documents {currentFolderId ? `› Case: ${folders.find(f => f.id === currentFolderId)?.name || ''}` : ''}
+          </h1>
         </div>
         <Card className="bg-white/70 border-steel-blue-200">
           <CardHeader>
@@ -221,7 +236,7 @@ const DatabaseDocuments = () => {
                 </TableRow>
               </TableHeader>
                 <TableBody>
-                  {folders.map((f) => (
+                  {!currentFolderId && folders.map((f) => (
                     <TableRow
                       key={`folder-${f.id}`}
                       onDragOver={(e) => e.preventDefault()}
@@ -231,6 +246,8 @@ const DatabaseDocuments = () => {
                         const doc = docs.find((d) => d.id === draggedId);
                         if (doc) handleDropOnFolder(f, doc);
                       }}
+                      onClick={() => setCurrentFolderId(f.id)}
+                      className="cursor-pointer"
                     >
                       <TableCell className="font-medium flex items-center gap-2">
                         <Folder className="h-4 w-4 text-steel-blue-600" /> {f.name}
@@ -238,7 +255,7 @@ const DatabaseDocuments = () => {
                       <TableCell>—</TableCell>
                       <TableCell className="text-sm text-steel-blue-700">cases/{f.id}/</TableCell>
                       <TableCell>
-                        <div className="text-sm text-steel-blue-600">Drop files here</div>
+                        <div className="text-sm text-steel-blue-600">Drop files here or click to open</div>
                       </TableCell>
                       <TableCell className="text-right"></TableCell>
                     </TableRow>
@@ -278,9 +295,9 @@ const DatabaseDocuments = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && folders.length === 0 && (
+                  {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-steel-blue-600">No documents found.</TableCell>
+                      <TableCell colSpan={5} className="text-center text-steel-blue-600">No documents here.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
