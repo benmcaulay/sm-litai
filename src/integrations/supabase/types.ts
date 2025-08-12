@@ -314,6 +314,10 @@ export type Database = {
           name: string
         }[]
       }
+      wipe_firm_uploads: {
+        Args: { bucket?: string }
+        Returns: number
+      }
     }
     Enums: {
       user_role: "admin" | "user"

@@ -458,6 +458,30 @@ const DatabaseSettings = () => {
                 <div className="text-sm text-steel-blue-600">Documents Indexed</div>
               </div>
           </div>
+          <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-steel-blue-600">Danger zone: permanently delete all uploaded documents for your firm.</p>
+            <Button
+              variant="outline"
+              className="border-red-300 text-red-700 hover:bg-red-50"
+              onClick={async () => {
+                if (!profile?.firm_id) {
+                  toast({ title: 'Not ready', description: 'Firm not loaded.' });
+                  return;
+                }
+                if (!confirm('This will permanently delete all uploaded documents for your firm. Continue?')) return;
+                toast({ title: 'Deleting...', description: 'Wiping uploaded documents...' });
+                const { data, error } = await (supabase as any).rpc('wipe_firm_uploads', { bucket: 'database-uploads' });
+                if (error) {
+                  toast({ title: 'Delete failed', description: error.message });
+                  return;
+                }
+                toast({ title: 'Deleted', description: `${data || 0} files removed.` });
+                await fetchStats();
+              }}
+            >
+              Delete All Uploaded Documents
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
