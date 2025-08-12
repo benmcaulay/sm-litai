@@ -50,6 +50,48 @@ export type Database = {
         }
         Relationships: []
       }
+      database_documents: {
+        Row: {
+          created_at: string
+          external_database_id: string
+          filename: string
+          firm_id: string
+          id: string
+          mime_type: string | null
+          size_bytes: number
+          storage_path: string
+          tags: string[]
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          external_database_id: string
+          filename: string
+          firm_id: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number
+          storage_path: string
+          tags?: string[]
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          external_database_id?: string
+          filename?: string
+          firm_id?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number
+          storage_path?: string
+          tags?: string[]
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
       external_databases: {
         Row: {
           api_key: string | null

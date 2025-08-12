@@ -49,7 +49,7 @@ const DatabaseDocuments = () => {
       try {
         const [{ data: db, error: dbErr }, { data, error }] = await Promise.all([
           supabase.from('external_databases').select('*').eq('id', id).maybeSingle(),
-          supabase.from('database_documents').select('*').eq('external_database_id', id).order('created_at', { ascending: false })
+          (supabase as any).from('database_documents').select('*').eq('external_database_id', id).order('created_at', { ascending: false })
         ]);
         if (dbErr) console.warn(dbErr);
         setDbInfo(db);
@@ -78,7 +78,7 @@ const DatabaseDocuments = () => {
       alert(delErr.message);
       return;
     }
-    const { error } = await supabase.from('database_documents').delete().eq('id', doc.id);
+    const { error } = await (supabase as any).from('database_documents').delete().eq('id', doc.id);
     if (error) alert(error.message);
     setDocs(prev => prev.filter(d => d.id !== doc.id));
   };
@@ -92,7 +92,7 @@ const DatabaseDocuments = () => {
       return;
     }
     const newName = newPath.split('/').pop() || doc.filename;
-    const { error } = await supabase.from('database_documents').update({ storage_path: newPath, filename: newName }).eq('id', doc.id);
+    const { error } = await (supabase as any).from('database_documents').update({ storage_path: newPath, filename: newName }).eq('id', doc.id);
     if (error) alert(error.message);
     setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, storage_path: newPath, filename: newName } : d));
   };
@@ -101,7 +101,7 @@ const DatabaseDocuments = () => {
     const val = (tagEdit[doc.id] || '').trim();
     if (!val) return;
     const next = Array.from(new Set([...(doc.tags || []), val]));
-    const { error } = await supabase.from('database_documents').update({ tags: next }).eq('id', doc.id);
+    const { error } = await (supabase as any).from('database_documents').update({ tags: next }).eq('id', doc.id);
     if (!error) {
       setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, tags: next } : d));
       setTagEdit(prev => ({ ...prev, [doc.id]: '' }));
@@ -110,7 +110,7 @@ const DatabaseDocuments = () => {
 
   const handleRemoveTag = async (doc: DbDoc, t: string) => {
     const next = (doc.tags || []).filter(x => x !== t);
-    const { error } = await supabase.from('database_documents').update({ tags: next }).eq('id', doc.id);
+    const { error } = await (supabase as any).from('database_documents').update({ tags: next }).eq('id', doc.id);
     if (!error) setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, tags: next } : d));
   };
 
