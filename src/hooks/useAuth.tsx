@@ -129,14 +129,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // Keep UI in loading state until profile + firm are fully hydrated
+          setLoading(true);
           setTimeout(() => {
-            ensureProfile(session.user!);
+            ensureProfile(session.user!)
+              .finally(() => setLoading(false));
           }, 0);
         } else {
           setProfile(null);
           setFirm(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
@@ -146,7 +149,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        ensureProfile(session.user);
+        setLoading(true);
+        ensureProfile(session.user)
+          .finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
