@@ -25,6 +25,8 @@ const AppContent = () => {
   const [documentCount, setDocumentCount] = useState<number>(0);
   const [caseFileCount, setCaseFileCount] = useState<number>(0);
   const [loadingStats, setLoadingStats] = useState<boolean>(false);
+  const [templatesAddedThisWeek, setTemplatesAddedThisWeek] = useState<number>(0);
+  const [documentsAddedThisWeek, setDocumentsAddedThisWeek] = useState<number>(0);
 
   const formatNumber = (n: number) => new Intl.NumberFormat().format(n || 0);
 
@@ -32,17 +34,24 @@ const AppContent = () => {
     if (!profile?.firm_id) return;
     setLoadingStats(true);
     try {
-      const [templatesRes, docsRes, casesRes] = await Promise.all([
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const [templatesRes, docsRes, casesRes, templatesWeekRes, docsWeekRes] = await Promise.all([
         supabase.from('templates').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id),
         supabase.from('generated_documents').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id),
         supabase.from('case_files').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id).eq('status', 'indexed'),
+        supabase.from('templates').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id).gte('created_at', oneWeekAgo),
+        supabase.from('generated_documents').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id).gte('created_at', oneWeekAgo),
       ]);
       if (templatesRes.error) console.warn('Template count error:', templatesRes.error);
       if (docsRes.error) console.warn('Generated documents count error:', docsRes.error);
       if (casesRes.error) console.warn('Case files count error:', casesRes.error);
+      if (templatesWeekRes.error) console.warn('Templates last 7 days count error:', templatesWeekRes.error);
+      if (docsWeekRes.error) console.warn('Generated documents last 7 days count error:', docsWeekRes.error);
       setTemplateCount(templatesRes.count || 0);
       setDocumentCount(docsRes.count || 0);
       setCaseFileCount(casesRes.count || 0);
+      setTemplatesAddedThisWeek(templatesWeekRes.count || 0);
+      setDocumentsAddedThisWeek(docsWeekRes.count || 0);
     } finally {
       setLoadingStats(false);
     }
@@ -194,7 +203,7 @@ const AppContent = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(templateCount)}</div>
-                  <p className="text-xs text-steel-blue-600">+3 from last month</p>
+                  <p className="text-xs text-steel-blue-600">+{formatNumber(templatesAddedThisWeek)} this week</p>
                 </CardContent>
               </Card>
 
@@ -207,7 +216,7 @@ const AppContent = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(documentCount)}</div>
-                  <p className="text-xs text-steel-blue-600">+89 this week</p>
+                  <p className="text-xs text-steel-blue-600">+{formatNumber(documentsAddedThisWeek)} this week</p>
                 </CardContent>
               </Card>
 
