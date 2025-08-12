@@ -99,6 +99,9 @@ const DocumentGenerator = () => {
         sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.'
       ]);
 
+      // Update visible output for preview
+      setGeneratedDoc(typeof data?.answer === 'string' ? data.answer : '');
+
       // Prepare downloadable file matching template type
       setRagSteps(prev => [...prev, 'Preparing downloadable file...']);
       const dl = await createDownload(template, data?.answer || '');
@@ -306,7 +309,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
         </Card>
       )}
 
-      {generatedDoc !== null && (
+      {download && (
         <Card className="bg-white/70 border-steel-blue-200">
           <CardHeader>
             <CardTitle className="text-steel-blue-800 flex items-center justify-between">
@@ -354,9 +357,15 @@ This document has been generated using RAG technology to ensure accuracy and pre
           </CardHeader>
           <CardContent>
             <div className="bg-white border border-steel-blue-200 rounded-md p-4">
-              <pre className="text-sm text-steel-blue-800 whitespace-pre-wrap font-mono">
-                {generatedDoc}
-              </pre>
+              {generatedDoc && generatedDoc.trim().length > 0 ? (
+                <pre className="text-sm text-steel-blue-800 whitespace-pre-wrap font-mono">
+                  {generatedDoc}
+                </pre>
+              ) : (
+                <div className="text-sm text-steel-blue-700">
+                  No inline preview available. Use Preview to open the file.
+                </div>
+              )}
             </div>
             <div className="flex items-center mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
               <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
