@@ -8,6 +8,7 @@ import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File } fr
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { Document as DocxDocument, Packer, Paragraph, HeadingLevel, TextRun } from 'docx';
 
 const DocumentGenerator = () => {
   const [query, setQuery] = useState("");
@@ -18,6 +19,15 @@ const DocumentGenerator = () => {
   const [templates, setTemplates] = useState<any[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const [download, setDownload] = useState<{ url: string; filename: string; mime: string } | null>(null);
+
+  // Revoke object URL on change/unmount to avoid leaks
+  useEffect(() => {
+    return () => {
+      if (download?.url) URL.revokeObjectURL(download.url);
+    };
+  }, [download?.url]);
 
   useEffect(() => {
     if (user) {
@@ -62,6 +72,8 @@ const DocumentGenerator = () => {
     setIsGenerating(true);
     setRagSteps([]);
     setGeneratedDoc(null);
+    if (download?.url) URL.revokeObjectURL(download.url);
+    setDownload(null);
 
     // RAG: Locate latest case file, extract context, and generate with GPT using server-side function
     setRagSteps(prev => [
@@ -86,6 +98,12 @@ const DocumentGenerator = () => {
         ...prev,
         data?.source?.filename ? `Verified answer generated from ${data.source.filename}.` : 'Verified answer generated.'
       ]);
+
+      // Prepare downloadable file matching template type
+      setRagSteps(prev => [...prev, 'Preparing downloadable file...']);
+      const dl = await createDownload(template, data?.answer || '');
+      setDownload(dl);
+      setRagSteps(prev => [...prev, 'Download ready.']);
 
       toast({
         title: "Document Generated Successfully",
@@ -154,6 +172,35 @@ ${template?.file_type === 'docx' ?
 }
 
 This document has been generated using RAG technology to ensure accuracy and prevent hallucinations.`;
+  };
+
+  const slugify = (s: string) => (s || 'document')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const createDownload = async (template: any, content: string) => {
+    const ext = template?.file_type === 'docx' ? 'docx' : (template?.file_type === 'md' ? 'md' : 'txt');
+    const mime = template?.file_type === 'docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : (ext === 'md' ? 'text/markdown' : 'text/plain');
+
+    let blob: Blob;
+    if (ext === 'docx') {
+      const lines = content.split(/\n\n+/).map((p: string) => p.trim()).filter(Boolean);
+      const children = [
+        new Paragraph({ text: template?.name || 'Generated Document', heading: HeadingLevel.HEADING_1 }),
+        ...lines.map((p: string) => new Paragraph({ children: [ new TextRun(p) ] })),
+      ];
+      const doc = new DocxDocument({ sections: [{ properties: {}, children }] });
+      blob = await Packer.toBlob(doc);
+    } else {
+      blob = new Blob([content], { type: mime });
+    }
+
+    const filename = `${slugify(template?.name)}-${Date.now()}.${ext}`;
+    const url = URL.createObjectURL(blob);
+    return { url, filename, mime };
   };
 
   return (
@@ -271,13 +318,36 @@ This document has been generated using RAG technology to ensure accuracy and pre
                 Generated Document
               </span>
               <div className="flex space-x-2">
-                <Button variant="outline" size="sm" className="border-steel-blue-300">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-steel-blue-300"
+                  disabled={!download}
+                  onClick={() => {
+                    if (!download) return;
+                    window.open(download.url, '_blank');
+                  }}
+                >
                   <Eye className="mr-2 h-4 w-4" />
                   Preview
                 </Button>
-                <Button variant="outline" size="sm" className="border-steel-blue-300">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-steel-blue-300"
+                  disabled={!download}
+                  onClick={() => {
+                    if (!download) return;
+                    const a = document.createElement('a');
+                    a.href = download.url;
+                    a.download = download.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  }}
+                >
                   <Download className="mr-2 h-4 w-4" />
-                  Download
+                  {download ? `Download (${download.filename.split('.').pop()?.toUpperCase()})` : 'Download'}
                 </Button>
               </div>
             </CardTitle>
