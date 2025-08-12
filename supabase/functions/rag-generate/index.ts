@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import PizZip from "https://esm.sh/pizzip@3.1.6";
+import pdfjsLib from "https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -21,9 +23,7 @@ serve(async (req) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-      }
+      { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } }
     );
 
     const openAIApiKey =
@@ -32,9 +32,7 @@ serve(async (req) => {
       Deno.env.get("OPENAI") ||
       "";
 
-    // Log presence (not the value) to help diagnose missing secret issues
     console.log("rag-generate: OPENAI_API_KEY present:", Boolean(openAIApiKey));
-
     if (!openAIApiKey) {
       return new Response(
         JSON.stringify({ error: "Missing OpenAI API key. Please set OPENAI_API_KEY in Supabase secrets." }),
@@ -44,21 +42,22 @@ serve(async (req) => {
 
     const { query, templateId } = await req.json();
     if (!query || !templateId) {
-      return new Response(
-        JSON.stringify({ error: "Missing query or templateId" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing query or templateId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userRes?.user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     const userId = userRes.user.id;
 
+    // Fetch template
     const { data: template, error: tplErr } = await supabase
       .from("templates")
       .select("id, name, file_type, file_path, content")
@@ -66,103 +65,143 @@ serve(async (req) => {
       .maybeSingle();
 
     if (tplErr || !template) {
-      return new Response(
-        JSON.stringify({ error: "Template not found or access denied" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Template not found or access denied" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Gather recent uploaded case files for this user (prefer PDFs and 'complain' files)
+    // List uploaded files for this user ("database files")
     const { data: objects, error: listErr } = await supabase.storage
       .from("database-uploads")
       .list(userId, { limit: 100, sortBy: { column: "name", order: "desc" } });
 
     if (listErr) {
       console.error("Storage list error", listErr);
-      return new Response(
-        JSON.stringify({ error: "Unable to list uploaded case files" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unable to list uploaded case files" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!objects || objects.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No uploaded case files found. Please upload a file in Database Connections." }),
+        JSON.stringify({ error: "No uploaded database files found. Please upload files in Database Connections." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Helper extractors
+    // Scoring: prioritize firm header/letterhead files, then 'complain/complaint', then PDFs
+    const scoreFile = (name: string) => {
+      const n = name.toLowerCase();
+      let s = 0;
+      if (/(letterhead|header|firm|contact)/i.test(n)) s += 100;
+      if (/(complain|complaint)/i.test(n)) s += 50;
+      if (/\.pdf$/i.test(n)) s += 20;
+      return s;
+    };
+
+    const sorted = [...objects].sort((a, b) => {
+      const sa = scoreFile(a.name);
+      const sb = scoreFile(b.name);
+      if (sb !== sa) return sb - sa;
+      return b.name.localeCompare(a.name);
+    });
+
+    const candidates = sorted.slice(0, 5);
+
+    // --- Extraction helpers ---
+    const stripXmlText = (xml: string) => {
+      const textMatches = xml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+      return textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").replace(/\s+/g, " ").trim();
+    };
+
     const extractDocxText = (buf: ArrayBuffer): string => {
       try {
         const zip = new PizZip(buf);
-        const documentXml = zip.file("word/document.xml");
-        if (!documentXml) return "";
-        const xmlContent = documentXml.asText();
-        const textMatches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
-        return textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").replace(/\s+/g, " ").trim();
+        let collected = "";
+        const main = zip.file("word/document.xml");
+        if (main) collected += stripXmlText(main.asText()) + "\n";
+        // Include headers and footers (often contain firm name/address/contact)
+        const headerFiles = zip.file(/word\/header[0-9]*\.xml/);
+        const footerFiles = zip.file(/word\/footer[0-9]*\.xml/);
+        for (const f of headerFiles) collected += stripXmlText(f.asText()) + "\n";
+        for (const f of footerFiles) collected += stripXmlText(f.asText()) + "\n";
+        return collected.replace(/\s+/g, " ").trim();
       } catch (e) {
         console.warn("DOCX parse failed", e);
         return "";
       }
     };
 
-    const extractPdfText = (buf: ArrayBuffer): string => {
-      // Very lightweight, best-effort text extraction from PDF content streams
+    const extractPdfText = async (buf: ArrayBuffer): Promise<string> => {
       try {
-        const bytes = new Uint8Array(buf);
-        let s = "";
-        for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-        const matches = s.match(/\((?:\\\)|\\\(|\\n|\\r|\\t|[^()])+\)/g) || [];
-        const decoded = matches
-          .map((m) => m.slice(1, -1)
-            .replace(/\\n/g, "\n")
-            .replace(/\\r/g, "\r")
-            .replace(/\\t/g, "\t")
-            .replace(/\\\(/g, "(")
-            .replace(/\\\)/g, ")")
-            .replace(/\\\\/g, "\\")
-          )
-          .join(" ");
-        return decoded.replace(/\s+/g, " ").trim();
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buf) });
+        const pdf = await loadingTask.promise;
+        let text = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content: any = await page.getTextContent();
+          const pageText = (content.items || [])
+            .map((it: any) => (typeof it?.str === "string" ? it.str : ""))
+            .join(" ");
+          text += pageText + "\n";
+        }
+        return text.replace(/\s+/g, " ").trim();
       } catch (e) {
-        console.warn("PDF parse failed", e);
-        return "";
+        console.warn("PDF.js parse failed, falling back to naive extraction", e);
+        try {
+          const bytes = new Uint8Array(buf);
+          let s = "";
+          for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+          const matches = s.match(/\((?:\\\)|\\\(|\\n|\\r|\\t|[^()])+\)/g) || [];
+          const decoded = matches
+            .map((m) =>
+              m
+                .slice(1, -1)
+                .replace(/\\n/g, "\n")
+                .replace(/\\r/g, "\r")
+                .replace(/\\t/g, "\t")
+                .replace(/\\\(/g, "(")
+                .replace(/\\\)/g, ")")
+                .replace(/\\\\/g, "\\")
+            )
+            .join(" ");
+          return decoded.replace(/\s+/g, " ").trim();
+        } catch {
+          return "";
+        }
       }
     };
 
-    const extractAnyText = (name: string, buf: ArrayBuffer): string => {
+    const extractAnyText = async (name: string, buf: ArrayBuffer): Promise<string> => {
       const lower = name.toLowerCase();
       if (lower.endsWith(".docx")) return extractDocxText(buf);
-      if (lower.endsWith(".pdf")) return extractPdfText(buf);
-      if (lower.endsWith(".txt") || lower.endsWith(".md")) return new TextDecoder().decode(buf).toString();
+      if (lower.endsWith(".pdf")) return await extractPdfText(buf);
       return new TextDecoder().decode(buf).toString();
     };
 
-    // Choose up to 5 priority files: prefer names containing 'complain' or 'complaint' and PDFs
-    const sorted = [...objects].sort((a, b) => (b.name.localeCompare(a.name)));
-    const preferred = sorted.filter((o) => /(complain|complaint)/i.test(o.name) || /\.pdf$/i.test(o.name));
-    const fallback = sorted.filter((o) => !preferred.includes(o));
-    const candidates = [...preferred, ...fallback].slice(0, 5);
+    const contexts: { filename: string; text: string; storagePath: string; chars: number }[] = [];
 
-    const contexts: { filename: string; text: string; storagePath: string }[] = [];
-
-    for (const obj of candidates) {
-      const storagePath = `${userId}/${obj.name}`;
-      const { data: fileData, error: dlErr } = await supabase.storage
-        .from("database-uploads")
-        .download(storagePath);
-      if (dlErr || !fileData) {
-        console.warn("Download failed for", storagePath, dlErr);
-        continue;
-      }
-      const buf = await fileData.arrayBuffer();
-      let text = extractAnyText(obj.name, buf);
-      if (!text || text.trim().length === 0) {
-        text = `No readable text extracted from ${obj.name}.`;
-      }
-      contexts.push({ filename: obj.name, text, storagePath });
-    }
+    // Download and extract text
+    await Promise.all(
+      candidates.map(async (obj) => {
+        const storagePath = `${userId}/${obj.name}`;
+        const { data: fileData, error: dlErr } = await supabase.storage
+          .from("database-uploads")
+          .download(storagePath);
+        if (dlErr || !fileData) {
+          console.warn("Download failed for", storagePath, dlErr);
+          return;
+        }
+        const buf = await fileData.arrayBuffer();
+        let text = await extractAnyText(obj.name, buf);
+        if (!text || text.trim().length === 0) {
+          text = `No readable text extracted from ${obj.name}.`;
+        }
+        contexts.push({ filename: obj.name, text, storagePath, chars: text.length });
+      })
+    );
 
     if (contexts.length === 0) {
       return new Response(
@@ -171,14 +210,14 @@ serve(async (req) => {
       );
     }
 
-    // Build combined, size-limited context
+    // Combine context (size-limited)
     const MAX_TOTAL = 16000;
-    const perFile = Math.floor(MAX_TOTAL / contexts.length);
+    const perFile = Math.max(1000, Math.floor(MAX_TOTAL / contexts.length));
     const combined = contexts
       .map((c) => `=== Source: ${c.filename} ===\n${c.text.slice(0, perFile)}`)
       .join("\n\n");
 
-    // Output outline for generation
+    // Default outline
     const defaultOutline = [
       "Title",
       "Header",
@@ -188,47 +227,57 @@ serve(async (req) => {
       "Arguments",
       "Relief Requested",
       "Conclusion",
-      "Signature"
+      "Signature",
     ];
 
-    // Optional firm DB hints from user's firm (name/domain). Header details will STILL be extracted from Sources.
+    // Optional firm hints from DB (table) — used only if header fields are missing in database files
     let firmDbHints: { name?: string; domain?: string } | null = null;
     try {
-      const { data: firmIdData } = await supabase.rpc('get_user_firm_id');
+      const { data: firmIdData } = await supabase.rpc("get_user_firm_id");
       const firmId = (firmIdData as string | null) || null;
       if (firmId) {
         const { data: firmRow } = await supabase
-          .from('firms')
-          .select('name, domain')
-          .eq('id', firmId)
+          .from("firms")
+          .select("name, domain")
+          .eq("id", firmId)
           .maybeSingle();
         if (firmRow) {
           firmDbHints = { name: (firmRow as any).name, domain: (firmRow as any).domain };
         }
       }
     } catch (_e) {
-      console.warn('Firm DB hint fetch failed');
+      console.warn("Firm DB hint fetch failed");
     }
 
-    // Phase 1: Initial evaluation — extract structured facts from all sources
+    // Phase 1: Extract structured facts from database files (authoritative for header)
     const analysisRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openAIApiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${openAIApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.1,
         messages: [
           {
             role: "system",
-            content: "You are a legal analyst. Extract structured facts from the provided case documents. Return STRICT JSON only.",
+            content:
+              "You are a legal analyst. Extract structured facts strictly from the provided database files (authoritative). Return STRICT JSON only.",
           },
           {
             role: "user",
-            content: `Analyze the following Sources and extract the key case facts as JSON with this shape:\n\n{
-  \"case_caption\": \"string\",\n  \"parties\": { \"plaintiff\": [\"...\"], \"defendant\": [\"...\"] },\n  \"claims\": [\"...\"],\n  \"key_dates\": [{ \"label\": \"\", \"date\": \"\" }],\n  \"venue\": \"\",\n  \"docket_number\": \"\",\n  \"monetary_amounts\": [{ \"label\": \"\", \"amount\": \"\" }],\n  \"firm_header\": { \"name\": \"\", \"address\": \"\", \"phone\": \"\", \"email\": \"\", \"website\": \"\", \"other\": \"\" },\n  \"fact_citations\": [{ \"fact\": \"\", \"sources\": [\"filename.ext\"] }],\n  \"other_facts\": [\"...\"],\n  \"source_filenames\": [\"...\"]\n}\n\nRules:\n- Use ONLY facts present in Sources; if unknown, omit the field or use an empty string.\n- firm_header MUST be derived from the Sources (e.g., firm letterheads, contact blocks).\n- Return STRICT JSON only. No comments, no trailing commas, no markdown.\n\nSources:\n${combined}`
+            content:
+              `Analyze the following database files (Sources) and extract key facts as JSON with this shape:\n\n{
+  "case_caption": "string",
+  "parties": { "plaintiff": ["..."], "defendant": ["..."] },
+  "claims": ["..."],
+  "key_dates": [{ "label": "", "date": "" }],
+  "venue": "",
+  "docket_number": "",
+  "monetary_amounts": [{ "label": "", "amount": "" }],
+  "firm_header": { "name": "", "address": "", "phone": "", "email": "", "website": "", "other": "" },
+  "fact_citations": [{ "fact": "", "sources": ["filename.ext"] }],
+  "other_facts": ["..."],
+  "source_filenames": ["..."]
+}\n\nRules:\n- These Sources are the DATABASE FILES and are AUTHORITATIVE.\n- firm_header MUST be derived from these Sources (e.g., letterheads, contact blocks).\n- If a field is unknown, leave it empty or omit it. Do NOT invent values.\n- Return STRICT JSON only. No comments, no trailing commas, no markdown.\n\nSources:\n${combined}`,
           },
         ],
       }),
@@ -246,35 +295,42 @@ serve(async (req) => {
     const analysisJson = await analysisRes.json();
     const analysisText: string = analysisJson?.choices?.[0]?.message?.content || "{}";
 
-    // Parse analysis JSON to extract firm header and citations for later use
     let analysisData: any = null;
-    try { analysisData = JSON.parse(analysisText); } catch {}
+    try {
+      analysisData = JSON.parse(analysisText);
+    } catch (_) {
+      analysisData = {};
+    }
+
     const firmHeaderFromSources = analysisData?.firm_header ?? null;
     const factCitations = analysisData?.fact_citations ?? null;
 
-    // Phase 2: RAG-verified generation using template + analysis + sources (+ firm header and DB hints)
+    // Phase 2: Generate document with strict template alignment and header populated from database files
     const generationRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openAIApiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${openAIApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.2,
-          messages: [
-            { role: "system", content: "You are a legal document assistant. Output plain text without code fences." },
-            { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
-            {
-              role: "system",
-              content: `Output contract:\n1) Start with a Title line.\n2) Immediately include a Header block populated with firm details (Name, Address, Phone, Email, Website). If a field is unknown, put [TBD].\n3) Follow these sections in order: ${defaultOutline.join(" > ")}.\n4) Use heading markers: # for the Title, ## for top-level sections, ### for subsections.\n5) After any sentence that relies on a Source, append an inline citation like [source: filename.ext]. Multiple filenames separated by commas.\n6) Use ONLY facts that are verifiably present in Sources. If a claim cannot be verified, mark it [TBD] and keep it minimal.\n7) Maintain a professional legal tone.`
-            },
-            { role: "system", content: `Firm header extracted from Sources (if any): ${JSON.stringify(firmHeaderFromSources)}` },
-            { role: "system", content: `Firm DB hints (optional fallback): ${JSON.stringify(firmDbHints)}` },
-            { role: "system", content: `Structured facts extracted (JSON):\n${analysisText}` },
-            { role: "system", content: `Sources (truncated):\n${combined}` },
-            { role: "user", content: query },
-          ],
+        messages: [
+          { role: "system", content: "You are a legal document assistant. Output plain text without code fences." },
+          { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
+          {
+            role: "system",
+            content:
+              `Authoritative data source: DATABASE FILES (Sources).\nRules for Header: Use firm details extracted from database files (firm_header below) as PRIMARY source. If a field is missing, then and only then use Firm DB hints. If still unknown, write [TBD]. Do not invent. Also, include these details in the Header section where they fit into the template. Append [source: firms-table] when using DB hints.`,
+          },
+          {
+            role: "system",
+            content:
+              `Output contract:\n1) Start with a Title line (#).\n2) Immediately include a Header block (## Header) with: Firm Name, Address, Phone, Email, Website.\n3) Follow sections in order: ${defaultOutline.join(" > ")}.\n4) Use heading markers: # (Title), ## (top-level), ### (subsections).\n5) After any sentence relying on a Source, append [source: filename.ext]; multiple filenames separated by commas.\n6) Use ONLY verifiable facts from Sources; otherwise mark [TBD].\n7) Maintain a professional legal tone.`,
+          },
+          { role: "system", content: `Firm header from database files: ${JSON.stringify(firmHeaderFromSources)}` },
+          { role: "system", content: `Firm DB hints (fallback only): ${JSON.stringify(firmDbHints)}` },
+          { role: "system", content: `Structured facts (JSON):\n${analysisText}` },
+          { role: "system", content: `Sources (truncated):\n${combined}` },
+          { role: "user", content: query },
+        ],
       }),
     });
 
@@ -300,15 +356,16 @@ serve(async (req) => {
         sources: contexts.map((c) => ({ bucket: "database-uploads", path: c.storagePath, filename: c.filename })),
         template: { id: template.id, name: template.name, file_type: template.file_type || "text" },
         file_selection_count: contexts.length,
+        extraction_diagnostics: contexts.map((c) => ({ filename: c.filename, chars: c.chars })),
         firm_db_hints: firmDbHints,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("rag-generate error", error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
