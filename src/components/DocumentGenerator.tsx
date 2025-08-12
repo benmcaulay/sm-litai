@@ -306,7 +306,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
         </Card>
       )}
 
-      {generatedDoc && (
+      {generatedDoc !== null && (
         <Card className="bg-white/70 border-steel-blue-200">
           <CardHeader>
             <CardTitle className="text-steel-blue-800 flex items-center justify-between">
