@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      case_files: {
+        Row: {
+          created_at: string
+          created_by: string
+          firm_id: string
+          id: string
+          metadata: Json | null
+          name: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          firm_id: string
+          id?: string
+          metadata?: Json | null
+          name: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          firm_id?: string
+          id?: string
+          metadata?: Json | null
+          name?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       external_databases: {
         Row: {
           api_key: string | null
@@ -80,6 +116,39 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      generated_documents: {
+        Row: {
+          created_at: string
+          created_by: string
+          firm_id: string
+          id: string
+          metadata: Json | null
+          output_type: string | null
+          template_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          firm_id: string
+          id?: string
+          metadata?: Json | null
+          output_type?: string | null
+          template_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          firm_id?: string
+          id?: string
+          metadata?: Json | null
+          output_type?: string | null
+          template_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
