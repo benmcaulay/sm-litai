@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import React from "react";
+import { AuthProvider } from "@/hooks/useAuth";
 
 const queryClient = new QueryClient();
 const DatabaseDocumentsLazy = React.lazy(() => import('./pages/DatabaseDocuments'));
@@ -32,18 +33,20 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <RecoveryRedirector />
-        <React.Suspense fallback={null}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/reset" element={<ResetPassword />} />
-            <Route path="/databases/:id/documents" element={<DatabaseDocumentsLazy />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </React.Suspense>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <RecoveryRedirector />
+          <React.Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/reset" element={<ResetPassword />} />
+              <Route path="/databases/:id/documents" element={<DatabaseDocumentsLazy />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </React.Suspense>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
