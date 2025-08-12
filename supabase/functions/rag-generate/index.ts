@@ -139,11 +139,11 @@ serve(async (req) => {
       return new TextDecoder().decode(buf).toString();
     };
 
-    // Choose up to 3 priority files: prefer names containing 'complain' or PDFs
+    // Choose up to 5 priority files: prefer names containing 'complain' or 'complaint' and PDFs
     const sorted = [...objects].sort((a, b) => (b.name.localeCompare(a.name)));
-    const preferred = sorted.filter((o) => /complain/i.test(o.name) || /\.pdf$/i.test(o.name));
+    const preferred = sorted.filter((o) => /(complain|complaint)/i.test(o.name) || /\.pdf$/i.test(o.name));
     const fallback = sorted.filter((o) => !preferred.includes(o));
-    const candidates = [...preferred, ...fallback].slice(0, 3);
+    const candidates = [...preferred, ...fallback].slice(0, 5);
 
     const contexts: { filename: string; text: string; storagePath: string }[] = [];
 
@@ -178,6 +178,37 @@ serve(async (req) => {
       .map((c) => `=== Source: ${c.filename} ===\n${c.text.slice(0, perFile)}`)
       .join("\n\n");
 
+    // Output outline for generation
+    const defaultOutline = [
+      "Title",
+      "Header",
+      "Introduction",
+      "Background",
+      "Facts",
+      "Arguments",
+      "Relief Requested",
+      "Conclusion",
+      "Signature"
+    ];
+
+    // Optional firm DB hints from user's firm (name/domain). Header details will STILL be extracted from Sources.
+    let firmDbHints: { name?: string; domain?: string } | null = null;
+    try {
+      const { data: firmIdData } = await supabase.rpc('get_user_firm_id');
+      const firmId = (firmIdData as string | null) || null;
+      if (firmId) {
+        const { data: firmRow } = await supabase
+          .from('firms')
+          .select('name, domain')
+          .eq('id', firmId)
+          .maybeSingle();
+        if (firmRow) {
+          firmDbHints = { name: (firmRow as any).name, domain: (firmRow as any).domain };
+        }
+      }
+    } catch (_e) {
+      console.warn('Firm DB hint fetch failed');
+    }
 
     // Phase 1: Initial evaluation — extract structured facts from all sources
     const analysisRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -196,14 +227,8 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content:
-              `Analyze the following sources and extract the key case facts as JSON with this shape:\n\n` +
-              `{"case_caption":"string","parties":{"plaintiff":["..."],"defendant":["..."]},` +
-              `"claims":["..."],"key_dates":[{"label":"","date":""}],` +
-              `"venue":"","docket_number":"","monetary_amounts":[{"label":"","amount":""}],` +
-              `"other_facts":["..."],"source_filenames":["..."]}` +
-              `\n\nOnly include facts present in sources. If unknown, omit field.\n\n` +
-              combined,
+            content: `Analyze the following Sources and extract the key case facts as JSON with this shape:\n\n{
+  \"case_caption\": \"string\",\n  \"parties\": { \"plaintiff\": [\"...\"], \"defendant\": [\"...\"] },\n  \"claims\": [\"...\"],\n  \"key_dates\": [{ \"label\": \"\", \"date\": \"\" }],\n  \"venue\": \"\",\n  \"docket_number\": \"\",\n  \"monetary_amounts\": [{ \"label\": \"\", \"amount\": \"\" }],\n  \"firm_header\": { \"name\": \"\", \"address\": \"\", \"phone\": \"\", \"email\": \"\", \"website\": \"\", \"other\": \"\" },\n  \"fact_citations\": [{ \"fact\": \"\", \"sources\": [\"filename.ext\"] }],\n  \"other_facts\": [\"...\"],\n  \"source_filenames\": [\"...\"]\n}\n\nRules:\n- Use ONLY facts present in Sources; if unknown, omit the field or use an empty string.\n- firm_header MUST be derived from the Sources (e.g., firm letterheads, contact blocks).\n- Return STRICT JSON only. No comments, no trailing commas, no markdown.\n\nSources:\n${combined}`
           },
         ],
       }),
@@ -221,7 +246,13 @@ serve(async (req) => {
     const analysisJson = await analysisRes.json();
     const analysisText: string = analysisJson?.choices?.[0]?.message?.content || "{}";
 
-    // Phase 2: RAG-verified generation using template + analysis + sources
+    // Parse analysis JSON to extract firm header and citations for later use
+    let analysisData: any = null;
+    try { analysisData = JSON.parse(analysisText); } catch {}
+    const firmHeaderFromSources = analysisData?.firm_header ?? null;
+    const factCitations = analysisData?.fact_citations ?? null;
+
+    // Phase 2: RAG-verified generation using template + analysis + sources (+ firm header and DB hints)
     const generationRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -231,18 +262,19 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.2,
-        messages: [
-          { role: "system", content: "You are a legal document assistant." },
-          { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
-          {
-            role: "system",
-            content:
-              "Use only facts that can be verified in the provided Sources. If a claim cannot be verified, mark it as [TBD] and do not fabricate. Maintain professional tone.",
-          },
-          { role: "system", content: `Structured facts extracted (JSON):\n${analysisText}` },
-          { role: "system", content: `Sources (truncated):\n${combined}` },
-          { role: "user", content: query },
-        ],
+          messages: [
+            { role: "system", content: "You are a legal document assistant. Output plain text without code fences." },
+            { role: "system", content: `Template: ${template.name} (${template.file_type || "text"})` },
+            {
+              role: "system",
+              content: `Output contract:\n1) Start with a Title line.\n2) Immediately include a Header block populated with firm details (Name, Address, Phone, Email, Website). If a field is unknown, put [TBD].\n3) Follow these sections in order: ${defaultOutline.join(" > ")}.\n4) Use heading markers: # for the Title, ## for top-level sections, ### for subsections.\n5) After any sentence that relies on a Source, append an inline citation like [source: filename.ext]. Multiple filenames separated by commas.\n6) Use ONLY facts that are verifiably present in Sources. If a claim cannot be verified, mark it [TBD] and keep it minimal.\n7) Maintain a professional legal tone.`
+            },
+            { role: "system", content: `Firm header extracted from Sources (if any): ${JSON.stringify(firmHeaderFromSources)}` },
+            { role: "system", content: `Firm DB hints (optional fallback): ${JSON.stringify(firmDbHints)}` },
+            { role: "system", content: `Structured facts extracted (JSON):\n${analysisText}` },
+            { role: "system", content: `Sources (truncated):\n${combined}` },
+            { role: "user", content: query },
+          ],
       }),
     });
 
@@ -262,8 +294,13 @@ serve(async (req) => {
       JSON.stringify({
         answer,
         analysis: analysisText,
+        firm_header: firmHeaderFromSources,
+        fact_citations: factCitations,
+        outline_used: defaultOutline,
         sources: contexts.map((c) => ({ bucket: "database-uploads", path: c.storagePath, filename: c.filename })),
-        template: { id: template.id, name: template.name },
+        template: { id: template.id, name: template.name, file_type: template.file_type || "text" },
+        file_selection_count: contexts.length,
+        firm_db_hints: firmDbHints,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
