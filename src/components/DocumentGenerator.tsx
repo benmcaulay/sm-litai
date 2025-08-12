@@ -18,7 +18,7 @@ const DocumentGenerator = () => {
   const [ragSteps, setRagSteps] = useState<string[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [download, setDownload] = useState<{ url: string; filename: string; mime: string } | null>(null);
 
@@ -130,6 +130,25 @@ const DocumentGenerator = () => {
       const dl = await createDownload(template, data?.answer || '');
       setDownload(dl);
       setRagSteps(prev => [...prev, 'Download ready.']);
+
+      // Record generation in analytics table
+      try {
+        if (user && profile?.firm_id) {
+          await supabase.from('generated_documents').insert({
+            firm_id: profile.firm_id,
+            created_by: user.id,
+            template_id: selectedTemplate,
+            output_type: template.file_type,
+            metadata: {
+              query,
+              source: sourceLabel || null,
+            },
+          });
+          window.dispatchEvent(new CustomEvent('generated_document_created'));
+        }
+      } catch (e) {
+        console.warn('Failed to record generated document:', e);
+      }
 
       toast({
         title: "Document Generated Successfully",

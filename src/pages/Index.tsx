@@ -12,12 +12,51 @@ import DatabaseSettings from "@/components/DatabaseSettings";
 import { AuthModal } from "@/components/AuthModal";
 import { FirmRegistrationModal } from "@/components/FirmRegistrationModal";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showFirmRegistrationModal, setShowFirmRegistrationModal] = useState(false);
   const { user, profile, firm, loading } = useAuth();
+
+  // Firm-scoped dashboard stats
+  const [templateCount, setTemplateCount] = useState<number>(0);
+  const [documentCount, setDocumentCount] = useState<number>(0);
+  const [caseFileCount, setCaseFileCount] = useState<number>(0);
+  const [loadingStats, setLoadingStats] = useState<boolean>(false);
+
+  const formatNumber = (n: number) => new Intl.NumberFormat().format(n || 0);
+
+  const fetchCounts = async () => {
+    if (!profile?.firm_id) return;
+    setLoadingStats(true);
+    try {
+      const [templatesRes, docsRes, casesRes] = await Promise.all([
+        supabase.from('templates').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id),
+        supabase.from('generated_documents').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id),
+        supabase.from('case_files').select('id', { count: 'exact', head: true }).eq('firm_id', profile.firm_id).eq('status', 'indexed'),
+      ]);
+      if (templatesRes.error) console.warn('Template count error:', templatesRes.error);
+      if (docsRes.error) console.warn('Generated documents count error:', docsRes.error);
+      if (casesRes.error) console.warn('Case files count error:', casesRes.error);
+      setTemplateCount(templatesRes.count || 0);
+      setDocumentCount(docsRes.count || 0);
+      setCaseFileCount(casesRes.count || 0);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCounts();
+  }, [profile?.firm_id]);
+
+  useEffect(() => {
+    const handler = () => fetchCounts();
+    window.addEventListener('generated_document_created', handler as EventListener);
+    return () => window.removeEventListener('generated_document_created', handler as EventListener);
+  }, [profile?.firm_id]);
 
   const isSetupComplete = profile?.role === 'admin' ? !!firm : !!firm;
 
@@ -154,7 +193,7 @@ const AppContent = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-steel-blue-800">24</div>
+                  <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(templateCount)}</div>
                   <p className="text-xs text-steel-blue-600">+3 from last month</p>
                 </CardContent>
               </Card>
@@ -167,7 +206,7 @@ const AppContent = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-steel-blue-800">1,247</div>
+                  <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(documentCount)}</div>
                   <p className="text-xs text-steel-blue-600">+89 this week</p>
                 </CardContent>
               </Card>
@@ -180,7 +219,7 @@ const AppContent = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-steel-blue-800">5,832</div>
+                  <div className="text-2xl font-bold text-steel-blue-800">{formatNumber(caseFileCount)}</div>
                   <p className="text-xs text-steel-blue-600">All databases synced</p>
                 </CardContent>
               </Card>
