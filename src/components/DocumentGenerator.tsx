@@ -99,6 +99,29 @@ const DocumentGenerator = () => {
         sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.'
       ]);
 
+      // Diagnostics: show how much text was actually extracted from each source
+      const diags = Array.isArray(data?.extraction_diagnostics) ? data.extraction_diagnostics : [];
+      if (diags.length) {
+        setRagSteps(prev => [
+          ...prev,
+          ...diags.map((d: any) => `Source ${d.filename}: ${d.chars} chars extracted`)
+        ]);
+        const totalChars = diags.reduce((a: number, b: any) => a + (b?.chars || 0), 0);
+        if (totalChars < 200) {
+          setRagSteps(prev => [
+            ...prev,
+            'Low text extraction from sources — they may be scanned PDFs or protected. Try uploading DOCX or text-based PDFs (not scans).'
+          ]);
+        }
+      }
+
+      // Show firm header detection status
+      if (data?.firm_header) {
+        const fh = data.firm_header;
+        const parts = [fh.name, fh.address, fh.phone, fh.email, fh.website].filter(Boolean).join(' | ');
+        setRagSteps(prev => [...prev, parts ? `Firm header detected: ${parts}` : 'Firm header missing from sources. Falling back to hints if available.']);
+      }
+
       // Update visible output for preview
       setGeneratedDoc(typeof data?.answer === 'string' ? data.answer : '');
 
