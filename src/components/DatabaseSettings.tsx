@@ -11,12 +11,14 @@ import { Database, Server, Key, RefreshCw, CheckCircle, AlertCircle, HardDrive, 
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 const DatabaseSettings = () => {
   const [connectionStatus, setConnectionStatus] = useState("connected");
   const [autoSync, setAutoSync] = useState(true);
   const [lastSync, setLastSync] = useState("2024-01-16 09:30 AM");
   const { toast } = useToast();
   const { profile } = useAuth();
+  const navigate = useNavigate();
 
   const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -116,6 +118,23 @@ const DatabaseSettings = () => {
         mimeType: file.type,
       },
     });
+
+    // Record in database_documents for organization
+    const { data: firmId, error: firmErr } = await supabase.rpc("get_user_firm_id");
+    if (!firmErr && firmId && userId) {
+      const { error: metaErr } = await (supabase as any).from("database_documents").insert({
+        firm_id: firmId,
+        external_database_id: activeConnectionId,
+        storage_path: path,
+        filename: file.name,
+        size_bytes: file.size,
+        mime_type: file.type || null,
+        uploaded_by: userId,
+      });
+      if (metaErr) {
+        console.warn("Failed to record document metadata:", metaErr);
+      }
+    }
 
     if (forwardErr) {
       toast({ title: "Forwarding failed", description: forwardErr.message });
@@ -284,6 +303,14 @@ const DatabaseSettings = () => {
                     className="border-steel-blue-300 hover:bg-steel-blue-50"
                   >
                     Test Connection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/databases/${db.id}/documents`)}
+                    className="border-steel-blue-300 hover:bg-steel-blue-50"
+                  >
+                    View Documents
                   </Button>
                 </div>
               </div>

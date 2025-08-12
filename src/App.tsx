@@ -7,8 +7,10 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-ro
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import React from "react";
 
 const queryClient = new QueryClient();
+const DatabaseDocumentsLazy = React.lazy(() => import('./pages/DatabaseDocuments'));
 
 const RecoveryRedirector = () => {
   const location = useLocation();
@@ -35,6 +37,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/reset" element={<ResetPassword />} />
+          <Route path="/databases/:id/documents" element={<DatabaseDocumentsLazy />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
