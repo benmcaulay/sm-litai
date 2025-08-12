@@ -25,6 +25,7 @@ const DatabaseSettings = () => {
   const [caseFileCount, setCaseFileCount] = useState<number>(0);
   const [documentCount, setDocumentCount] = useState<number>(0);
   const [loadingStats, setLoadingStats] = useState<boolean>(false);
+  const [totalBytes, setTotalBytes] = useState<number>(0);
   const [dbName, setDbName] = useState("");
   const [dbType, setDbType] = useState<string | undefined>();
   const [apiKey, setApiKey] = useState("");
@@ -132,7 +133,13 @@ const DatabaseSettings = () => {
 
   // Stats helpers
   const formatNumber = (n: number) => new Intl.NumberFormat().format(n || 0);
-
+  const formatBytes = (bytes: number) => {
+    if (!bytes || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  };
   const fetchStats = async () => {
     if (!profile?.firm_id) return;
     setLoadingStats(true);
@@ -152,6 +159,10 @@ const DatabaseSettings = () => {
       if (docsRes.error) console.warn('Generated documents count error:', docsRes.error);
       setCaseFileCount(casesRes.count || 0);
       setDocumentCount(docsRes.count || 0);
+
+      const { data: usageBytes, error: usageErr } = await supabase.rpc('get_firm_storage_usage_bytes', { bucket: 'database-uploads' });
+      if (usageErr) console.warn('Storage usage error:', usageErr);
+      setTotalBytes(usageBytes || 0);
     } finally {
       setLoadingStats(false);
     }
