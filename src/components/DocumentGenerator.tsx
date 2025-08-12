@@ -213,7 +213,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
 
     let blob: Blob;
     if (ext === 'docx') {
-      const lines = content.split(/\n\n+/).map((p: string) => p.trim()).filter(Boolean);
+      const lines = content.split(/\n\n+/).map((p: string) => p.replace(/\s+$/g, '')).filter((p) => p.length > 0);
       const children = [
         new Paragraph({ text: template?.name || 'Generated Document', heading: HeadingLevel.HEADING_1 }),
         ...lines.map((p: string) => new Paragraph({ children: [ new TextRun(p) ] })),

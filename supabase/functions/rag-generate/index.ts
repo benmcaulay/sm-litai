@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import PizZip from "https://esm.sh/pizzip@3.1.6";
 import pdfjsLib from "https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs";
+// Configure PDF.js worker to avoid errors in edge runtime
+try { (pdfjsLib as any).GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.worker.mjs"; } catch (_) {}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,9 +113,25 @@ serve(async (req) => {
     const candidates = sorted.slice(0, 5);
 
     // --- Extraction helpers ---
-    const stripXmlText = (xml: string) => {
-      const textMatches = xml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
-      return textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").replace(/\s+/g, " ").trim();
+    const stripXmlParagraphs = (xml: string) => {
+      try {
+        // Convert explicit Word line breaks to \n before extracting text
+        const withLineBreaks = xml.replace(/<w:br\s*\/?>/gi, "\n");
+        const paraBlocks = withLineBreaks.split(/<w:p[^>]*>/i);
+        const out: string[] = [];
+        for (const block of paraBlocks) {
+          const texts = block.match(/<w:t[^>]*>([^<]*)<\/w:t>/gi) || [];
+          if (texts.length === 0) continue;
+          const combined = texts.map((m) => m.replace(/<[^>]*>/g, "")).join("");
+          const cleaned = combined.replace(/[\t\r]+/g, "").trimEnd();
+          if (cleaned) out.push(cleaned);
+        }
+        return out.join("\n\n");
+      } catch (_) {
+        // Fallback to simple text extraction
+        const textMatches = xml.match(/<w:t[^>]*>([^<]*)<\/w:t>/gi) || [];
+        return textMatches.map((m) => m.replace(/<[^>]*>/g, "")).join(" ").trim();
+      }
     };
 
     const extractDocxText = (buf: ArrayBuffer): string => {
@@ -121,13 +139,13 @@ serve(async (req) => {
         const zip = new PizZip(buf);
         let collected = "";
         const main = zip.file("word/document.xml");
-        if (main) collected += stripXmlText(main.asText()) + "\n";
+        if (main) collected += stripXmlParagraphs(main.asText()) + "\n\n";
         // Include headers and footers (often contain firm name/address/contact)
         const headerFiles = zip.file(/word\/header[0-9]*\.xml/);
         const footerFiles = zip.file(/word\/footer[0-9]*\.xml/);
-        for (const f of headerFiles) collected += stripXmlText(f.asText()) + "\n";
-        for (const f of footerFiles) collected += stripXmlText(f.asText()) + "\n";
-        return collected.replace(/\s+/g, " ").trim();
+        for (const f of headerFiles) collected += stripXmlParagraphs(f.asText()) + "\n\n";
+        for (const f of footerFiles) collected += stripXmlParagraphs(f.asText()) + "\n\n";
+        return collected.replace(/\n{3,}/g, "\n\n").trim();
       } catch (e) {
         console.warn("DOCX parse failed", e);
         return "";
@@ -138,16 +156,26 @@ serve(async (req) => {
       try {
         const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buf) });
         const pdf = await loadingTask.promise;
-        let text = "";
+        const pages: string[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
-          const content: any = await page.getTextContent();
-          const pageText = (content.items || [])
-            .map((it: any) => (typeof it?.str === "string" ? it.str : ""))
-            .join(" ");
-          text += pageText + "\n";
+          const content: any = await page.getTextContent({ disableCombineTextItems: false });
+          const items: any[] = content.items || [];
+          const lines = new Map<number, { y: number; parts: { x: number; str: string }[] }>();
+          for (const it of items) {
+            const tr = Array.isArray(it?.transform) ? it.transform : [];
+            const x = typeof tr[4] === "number" ? tr[4] : 0;
+            const y = typeof tr[5] === "number" ? tr[5] : 0;
+            const key = Math.round(y);
+            if (!lines.has(key)) lines.set(key, { y: key, parts: [] });
+            lines.get(key)!.parts.push({ x, str: typeof it?.str === "string" ? it.str : "" });
+          }
+          const sortedLines = Array.from(lines.values())
+            .sort((a, b) => b.y - a.y)
+            .map((ln) => ln.parts.sort((p, q) => p.x - q.x).map((p) => p.str.trim()).join(" ").replace(/\s+$/g, ""));
+          pages.push(sortedLines.join("\n"));
         }
-        return text.replace(/\s+/g, " ").trim();
+        return pages.join("\n\n").replace(/\s+$/g, "");
       } catch (e) {
         console.warn("PDF.js parse failed, falling back to naive extraction", e);
         try {
@@ -166,8 +194,8 @@ serve(async (req) => {
                 .replace(/\\\)/g, ")")
                 .replace(/\\\\/g, "\\")
             )
-            .join(" ");
-          return decoded.replace(/\s+/g, " ").trim();
+            .join("");
+          return decoded.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
         } catch {
           return "";
         }
