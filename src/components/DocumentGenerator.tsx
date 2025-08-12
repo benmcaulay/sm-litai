@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File } from "lucide-react";
+import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File, Folder } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +12,8 @@ import { Document as DocxDocument, Packer, Paragraph, HeadingLevel, TextRun } fr
 
 const DocumentGenerator = () => {
   const [query, setQuery] = useState("");
+  const [selectedCase, setSelectedCase] = useState("");
+  const [cases, setCases] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDoc, setGeneratedDoc] = useState<string | null>(null);
@@ -32,6 +34,7 @@ const DocumentGenerator = () => {
   useEffect(() => {
     if (user) {
       fetchTemplates();
+      fetchCases();
     }
   }, [user]);
 
@@ -49,11 +52,24 @@ const DocumentGenerator = () => {
     }
   };
 
+  const fetchCases = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('case_files')
+        .select('id, name')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setCases(data || []);
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+    }
+  };
+
   const handleGenerate = async () => {
-    if (!query.trim() || !selectedTemplate) {
+    if (!selectedCase || !selectedTemplate) {
       toast({
         title: "Missing Information",
-        description: "Please enter a query and select a template.",
+        description: "Please select a case and a template. Special instructions are optional.",
         variant: "destructive",
       });
       return;
@@ -68,6 +84,7 @@ const DocumentGenerator = () => {
       });
       return;
     }
+    const selectedCaseObj = cases.find((c: any) => c.id === selectedCase);
 
     setIsGenerating(true);
     setRagSteps([]);
@@ -78,7 +95,7 @@ const DocumentGenerator = () => {
     // RAG: Locate latest case file, extract context, and generate with GPT using server-side function
     setRagSteps(prev => [
       ...prev,
-      "Locating latest case file...",
+      `Using case: ${selectedCaseObj?.name || 'Selected case'}`,
       template.file_type === 'docx' ? "Extracting text from .docx..." : "Preparing template context...",
       "Generating answer with GPT...",
     ]);
@@ -88,6 +105,8 @@ const DocumentGenerator = () => {
         body: {
           query,
           templateId: selectedTemplate,
+          caseId: selectedCase,
+          caseName: selectedCaseObj?.name || null,
         },
       });
 
@@ -142,6 +161,8 @@ const DocumentGenerator = () => {
             metadata: {
               query,
               source: sourceLabel || null,
+              caseId: selectedCase,
+              caseName: selectedCaseObj?.name || null,
             },
           });
           window.dispatchEvent(new CustomEvent('generated_document_created'));
@@ -261,50 +282,73 @@ This document has been generated using RAG technology to ensure accuracy and pre
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-steel-blue-700 mb-2">
-              Select Template
-            </label>
-            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-              <SelectTrigger className="border-steel-blue-300">
-                <SelectValue placeholder="Choose a document template" />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    <div className="flex items-center gap-2">
-                      {template.file_type === 'docx' ? 
-                        <File className="h-4 w-4 text-blue-500" /> : 
-                        <FileText className="h-4 w-4 text-gray-500" />
-                      }
-                      <div>
-                        <div className="font-medium">{template.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {template.category} • {template.file_type?.toUpperCase() || 'TEXT'}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-steel-blue-700 mb-2">
+                Select Case
+              </label>
+              <Select value={selectedCase} onValueChange={setSelectedCase}>
+                <SelectTrigger className="border-steel-blue-300">
+                  <SelectValue placeholder="Choose a case folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cases.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <div className="flex items-center gap-2">
+                        <Folder className="h-4 w-4 text-steel-blue-600" />
+                        <div className="font-medium">{c.name}</div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-steel-blue-700 mb-2">
+                Select Template
+              </label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className="border-steel-blue-300">
+                  <SelectValue placeholder="Choose a document template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      <div className="flex items-center gap-2">
+                        {template.file_type === 'docx' ? 
+                          <File className="h-4 w-4 text-blue-500" /> : 
+                          <FileText className="h-4 w-4 text-gray-500" />
+                        }
+                        <div>
+                          <div className="font-medium">{template.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {template.category} • {template.file_type?.toUpperCase() || 'TEXT'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-steel-blue-700 mb-2">
-              Your Request
+              Special Instructions (optional)
             </label>
             <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Example: 'Write a deposition summary for Coldwater v. Cowell' or 'Generate an introductory letter for the Johnson personal injury case'"
-              className="min-h-[100px] border-steel-blue-300 focus:border-primary"
+              placeholder="Optional: Add any special instructions, preferences, or constraints to tailor the document."
+              className="min-h-[100px] border-steel-blue-300 focus:border-primary placeholder:text-steel-blue-400"
             />
           </div>
 
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || !query.trim() || !selectedTemplate}
+            disabled={isGenerating || !selectedCase || !selectedTemplate}
             className="w-full bg-primary hover:bg-primary/90"
           >
             {isGenerating ? (
