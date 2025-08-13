@@ -319,6 +319,10 @@ serve(async (req) => {
             role: "system",
             content: `You are a legal analyst. Extract structured facts strictly from DATABASE SOURCES (authoritative) and return STRICT JSON only.
 
+Selective Memory:
+-FORGET ANY PREVIOUS "CONTEXT" about case details. If you try to use previous information, this will cause hallucination. DO NOT repeat information from previous calls
+-generate entirely new data each for call. THIS IS HIGH PRIORITY.
+
 Perspective and party mapping:
 - Host firm: ${firmDbHints?.name ? firmDbHints.name : "[unknown]"} (treat as "our firm" when present).
 - Any firm names not matching the host firm are "opposing firms"; their clients are "opposing parties".
