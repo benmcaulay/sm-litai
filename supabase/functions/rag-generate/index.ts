@@ -312,7 +312,7 @@ serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${openAIApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         temperature: 0.1,
         messages: [
           {
@@ -372,7 +372,7 @@ Extraction completeness:
       method: "POST",
       headers: { Authorization: `Bearer ${openAIApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
           { role: "system", content: "You are a legal document assistant. Output plain text only. Do not use markdown headings, code fences, or additional labels." },
