@@ -325,6 +325,7 @@ Perspective and party mapping:
 - If the document is a Demand Letter addressed to our firm (e.g., title/filename mentions "demand" or it is letter-form), the sender represents the opposing party; reverse any "our client" wording in the letter accordingly for party mapping.
 
 Document type inference:
+- If the template contains personal information intially, delete it. Do not include any names, places, or dates from the templates.
 - Infer the document type from the filename/title and content (e.g., Demand Letter, Complaint, Answer). If helpful, include "document_type" in the JSON.
 
 Extraction completeness:
