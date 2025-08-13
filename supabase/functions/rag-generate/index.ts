@@ -317,8 +317,19 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content:
-              "You are a legal analyst. Extract structured facts strictly from the provided database files (authoritative). Return STRICT JSON only.",
+            content: `You are a legal analyst. Extract structured facts strictly from DATABASE SOURCES (authoritative) and return STRICT JSON only.
+
+Perspective and party mapping:
+- Host firm: ${firmDbHints?.name ? firmDbHints.name : "[unknown]"} (treat as "our firm" when present).
+- Any firm names not matching the host firm are "opposing firms"; their clients are "opposing parties".
+- If the document is a Demand Letter addressed to our firm (e.g., title/filename mentions "demand" or it is letter-form), the sender represents the opposing party; reverse any "our client" wording in the letter accordingly for party mapping.
+
+Document type inference:
+- Infer the document type from the filename/title and content (e.g., Demand Letter, Complaint, Answer). If helpful, include "document_type" in the JSON.
+
+Extraction completeness:
+- The DATABASE may span many pages (e.g., 40+). Be comprehensive and search the entire content to populate fields when evidence exists.
+- If unknown, leave empty or omit. Do not invent values.`,
           },
           {
             role: "user",
@@ -362,6 +373,7 @@ serve(async (req) => {
 
     const firmHeaderFromSources = analysisData?.firm_header ?? null;
     const factCitations = analysisData?.fact_citations ?? null;
+    const hostFirmName = firmDbHints?.name || (firmHeaderFromSources?.name ?? null);
 
     // Phase 2: Generate document with strict template alignment and header populated from database files
     const generationRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -378,8 +390,10 @@ serve(async (req) => {
           { role: "system", content: `DATABASE SOURCES (truncated):\n${DATABASE_BLOCKS}` },
           { role: "system", content: `Firm header from database files: ${JSON.stringify(firmHeaderFromSources)}` },
           { role: "system", content: `Firm DB hints (fallback only): ${JSON.stringify(firmDbHints)}` },
+          { role: "system", content: `Host firm perspective: ${hostFirmName || "[unknown]"} is "our firm". If the document is a Demand Letter addressed to our firm, the sender represents the opposing party; reverse any 'our client' language in that letter to reflect the opposing client.` },
           { role: "system", content: `Structured facts (JSON):\n${analysisText}` },
-          { role: "system", content: "Formatting instructions:\n- If a DATABASE STYLE AUTHORITY is provided, EXACTLY copy its intro, outro, line breaks, blank lines, paragraph spacing, numbering/bullets, indentation, and section order/wording.\n- Replace only variable factual content; preserve all format markers and spacing.\n- If a value is unknown, keep the existing placeholder if present; otherwise write [TBD] while preserving spacing.\n- Do not add citations, bracketed notes, hashes (#), or headings not present in the style authority.\n- Output must be plain text with the exact spacing and blank lines as the style authority.\n- If no DATABASE STYLE AUTHORITY exists, follow the TEMPLATE format instead. Never mix styles." },
+          { role: "system", content: "Comprehensiveness:\n- Exhaustively search all DATABASE content (may span 40+ pages) to fill template placeholders wherever possible.\n- Only leave [TBD] if the information is truly unavailable after reviewing all sources." },
+          { role: "system", content: "Formatting instructions:\n- If a DATABASE STYLE AUTHORITY is provided, EXACTLY copy its intro, outro, line breaks, blank lines, paragraph spacing, numbering/bullets, indentation, and section order/wording.\n- Replace only variable factual content; preserve all format markers and spacing.\n- Do not add citations, bracketed notes, hashes (#), or headings not present in the style authority.\n- Output must be plain text with the exact spacing and blank lines as the style authority.\n- If no DATABASE STYLE AUTHORITY exists, follow the TEMPLATE format instead. Never mix styles." },
           { role: "user", content: query || "Generate the document strictly following the template and database sources." },
         ],
       }),
