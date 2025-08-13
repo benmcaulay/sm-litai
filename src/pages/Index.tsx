@@ -303,7 +303,7 @@ const AppContent = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="generate">
+          <TabsContent value="generate" forceMount>
             <DocumentGenerator />
           </TabsContent>
 

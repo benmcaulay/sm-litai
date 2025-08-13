@@ -42,7 +42,7 @@ serve(async (req) => {
       );
     }
 
-    const { query, templateId, caseId, caseName } = await req.json();
+    const { query, templateId, caseId, caseName, async: runInBackground } = await req.json();
     if (!templateId) {
       return new Response(JSON.stringify({ error: "Missing templateId" }), {
         status: 400,
