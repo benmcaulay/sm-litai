@@ -386,7 +386,7 @@ Extraction completeness:
           { role: "system", content: `Structured facts (JSON):\n${analysisText}` },
           { role: "system", content: "Comprehensiveness:\n- Exhaustively search all DATABASE content (may span 40+ pages) to fill template placeholders wherever possible.\n- Only leave [TBD] if the information is truly unavailable after reviewing all sources." },
           { role: "system", content: "Formatting instructions:\n- If a DATABASE STYLE AUTHORITY is provided, EXACTLY copy its intro, outro, line breaks, blank lines, paragraph spacing, numbering/bullets, indentation, and section order/wording.\n- Replace only variable factual content; preserve all format markers and spacing.\n- Do not add citations, bracketed notes, hashes (#), or headings not present in the style authority.\n- Output must be plain text with the exact spacing and blank lines as the style authority.\n- If no DATABASE STYLE AUTHORITY exists, follow the TEMPLATE format instead. Never mix styles." },
-          { role: "user", content: query || "Generate the document strictly following the template and database sources." },
+          { role: "user", content: query || "Generate a new document strictly following the template and database sources. Do not pull information from any previous queries, or any source other than the current template and database sources." },
         ],
       }),
     });
