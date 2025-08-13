@@ -13,6 +13,8 @@ import { AuthModal } from "@/components/AuthModal";
 import { FirmRegistrationModal } from "@/components/FirmRegistrationModal";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import QueryStatusPanel from "@/components/QueryStatusPanel";
+import { GenerationStatusProvider } from "@/hooks/useGenerationStatus";
 
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -299,9 +301,10 @@ const AppContent = () => {
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Current</span>
                   </div>
                 </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+               </Card>
+             </div>
+             <QueryStatusPanel />
+           </TabsContent>
 
           <TabsContent value="generate" forceMount>
             <DocumentGenerator />
@@ -309,12 +312,14 @@ const AppContent = () => {
 
           <TabsContent value="templates">
             <TemplateManager />
+            <QueryStatusPanel />
           </TabsContent>
 
           {profile?.role === 'admin' && (
             <>
               <TabsContent value="database">
                 <DatabaseSettings />
+                <QueryStatusPanel />
               </TabsContent>
 
               <TabsContent value="settings">
@@ -332,6 +337,7 @@ const AppContent = () => {
                     <p className="text-steel-blue-600">Settings panel coming soon...</p>
                   </CardContent>
                 </Card>
+                <QueryStatusPanel />
               </TabsContent>
             </>
           )}
@@ -344,7 +350,9 @@ const AppContent = () => {
 const Index = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <GenerationStatusProvider>
+        <AppContent />
+      </GenerationStatusProvider>
     </AuthProvider>
   );
 };

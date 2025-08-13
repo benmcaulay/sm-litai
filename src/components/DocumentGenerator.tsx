@@ -9,15 +9,16 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Document as DocxDocument, Packer, Paragraph, HeadingLevel, TextRun } from 'docx';
+import QueryStatusPanel from "@/components/QueryStatusPanel";
+import { useGenerationStatus } from "@/hooks/useGenerationStatus";
 
 const DocumentGenerator = () => {
   const [query, setQuery] = useState("");
   const [selectedCase, setSelectedCase] = useState("");
   const [cases, setCases] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { isGenerating, setIsGenerating, addStep, reset, steps: ragSteps } = useGenerationStatus();
   const [generatedDoc, setGeneratedDoc] = useState<string | null>(null);
-  const [ragSteps, setRagSteps] = useState<string[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const { toast } = useToast();
   const { user, profile } = useAuth();
@@ -87,18 +88,15 @@ const DocumentGenerator = () => {
     const selectedCaseObj = cases.find((c: any) => c.id === selectedCase);
 
     setIsGenerating(true);
-    setRagSteps([]);
+    reset();
     setGeneratedDoc(null);
     if (download?.url) URL.revokeObjectURL(download.url);
     setDownload(null);
 
     // RAG: Locate case files, extract context, and generate with GPT using server-side function
-    setRagSteps(prev => [
-      ...prev,
-      `Using case: ${selectedCaseObj?.name || 'Selected case'}`,
-      template.file_type === 'docx' ? "Extracting text from .docx..." : "Preparing template context...",
-      "Generating answer with GPT...",
-    ]);
+    addStep(`Using case: ${selectedCaseObj?.name || 'Selected case'}`);
+    addStep(template.file_type === 'docx' ? "Extracting text from .docx..." : "Preparing template context...");
+    addStep("Generating answer with GPT...");
 
     try {
       const { data, error } = await supabase.functions.invoke('rag-generate', {
@@ -113,24 +111,15 @@ const DocumentGenerator = () => {
       if (error) throw error;
 
       const sourceLabel = data?.source?.filename || (Array.isArray(data?.sources) && data.sources[0]?.filename);
-      setRagSteps(prev => [
-        ...prev,
-        sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.'
-      ]);
+      addStep(sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.');
 
       // Diagnostics: show how much text was actually extracted from each source
       const diags = Array.isArray(data?.extraction_diagnostics) ? data.extraction_diagnostics : [];
       if (diags.length) {
-        setRagSteps(prev => [
-          ...prev,
-          ...diags.map((d: any) => `Source ${d.filename}: ${d.chars} chars extracted`)
-        ]);
+        diags.forEach((d: any) => addStep(`Source ${d.filename}: ${d.chars} chars extracted`));
         const totalChars = diags.reduce((a: number, b: any) => a + (b?.chars || 0), 0);
         if (totalChars < 200) {
-          setRagSteps(prev => [
-            ...prev,
-            'Low text extraction from sources — they may be scanned PDFs or protected. Try uploading DOCX or text-based PDFs (not scans).'
-          ]);
+          addStep('Low text extraction from sources — they may be scanned PDFs or protected. Try uploading DOCX or text-based PDFs (not scans).');
         }
       }
 
@@ -138,17 +127,17 @@ const DocumentGenerator = () => {
       if (data?.firm_header) {
         const fh = data.firm_header;
         const parts = [fh.name, fh.address, fh.phone, fh.email, fh.website].filter(Boolean).join(' | ');
-        setRagSteps(prev => [...prev, parts ? `Firm header detected: ${parts}` : 'Firm header missing from sources. Falling back to hints if available.']);
+        addStep(parts ? `Firm header detected: ${parts}` : 'Firm header missing from sources. Falling back to hints if available.');
       }
 
       // Update visible output for preview
       setGeneratedDoc(typeof data?.answer === 'string' ? data.answer : '');
 
       // Prepare downloadable file matching template type
-      setRagSteps(prev => [...prev, 'Preparing downloadable file...']);
+      addStep('Preparing downloadable file...');
       const dl = await createDownload(template, data?.answer || '');
       setDownload(dl);
-      setRagSteps(prev => [...prev, 'Download ready.']);
+      addStep('Download ready.');
 
       // Record generation in analytics table
       try {
@@ -198,10 +187,9 @@ const DocumentGenerator = () => {
         detail = typeof error?.message === 'string' ? error.message : '';
       }
       const quota = (detail && (detail.includes('insufficient_quota') || detail.toLowerCase().includes('quota')));
-      setRagSteps(prev => [
-        ...prev,
-        quota ? 'OpenAI quota exceeded.' : (detail ? `Error: ${detail}${status ? ` (status ${status})` : ''}` : 'Error during generation.'),
-      ]);
+      addStep(
+        quota ? 'OpenAI quota exceeded.' : (detail ? `Error: ${detail}${status ? ` (status ${status})` : ''}` : 'Error during generation.')
+      );
       toast({
         title: "Generation Failed",
         description: quota
@@ -366,34 +354,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
         </CardContent>
       </Card>
 
-      {ragSteps.length > 0 && (
-        <Card className="bg-white/70 border-steel-blue-200">
-          <CardHeader>
-            <CardTitle className="text-steel-blue-800 text-lg">
-              RAG Process Status
-            </CardTitle>
-            <CardDescription className="text-steel-blue-600">
-              Real-time processing to ensure document accuracy
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {ragSteps.map((step, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-steel-blue-700">{step}</span>
-                </div>
-              ))}
-              {isGenerating && (
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="h-4 w-4 text-steel-blue-500 animate-spin" />
-                  <span className="text-sm text-steel-blue-600">Processing...</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <QueryStatusPanel />
 
       {download && (
         <Card className="bg-white/70 border-steel-blue-200">
