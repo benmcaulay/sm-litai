@@ -312,7 +312,7 @@ serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${openAIApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5o-mini",
         temperature: 0.1,
         messages: [
           {
@@ -335,20 +335,7 @@ Extraction completeness:
           {
             role: "user",
             content:
-              `Analyze the following database files (Sources) and extract key facts as JSON with this shape:\n\n{
-  "case_caption": "string",
-  "parties": { "plaintiff": ["..."], "defendant": ["..."] },
-  "claims": ["..."],
-  "key_dates": [{ "label": "", "date": "" }],
-  "venue": "",
-  "docket_number": "",
-  "monetary_amounts": [{ "label": "", "amount": "" }],
-  "firm_header": { "name": "", "address": "", "phone": "", "email": "", "website": "", "other": "" },
-  "fact_citations": [{ "fact": "", "sources": ["filename.ext"] }],
-  "other_facts": ["..."],
-  "source_filenames": ["..."]
-}\n\nRules:\n- These Sources are the DATABASE FILES and are AUTHORITATIVE.\n- firm_header MUST be derived from these Sources (e.g., letterheads, contact blocks).\n- If a field is unknown, leave it empty or omit it. Do NOT invent values.\n- Return STRICT JSON only. No comments, no trailing commas, no markdown.\n\nSources:\n${combined}`,
-          },
+              
         ],
       }),
     });
