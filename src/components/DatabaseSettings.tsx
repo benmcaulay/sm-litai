@@ -62,11 +62,13 @@ const DatabaseSettings = () => {
       setLoading(false);
       return;
     }
-    const { error } = await supabase.rpc("create_encrypted_database", {
-      db_name: dbName,
-      db_type: dbType,
-      db_api_key: apiKey || null,
-      db_upload_endpoint: uploadEndpoint || null,
+    const { error } = await supabase.from("external_databases").insert({
+      name: dbName,
+      type: dbType,
+      api_key: apiKey || null, // The encryption will be handled by database triggers
+      upload_endpoint: uploadEndpoint || null,
+      firm_id: firmId,
+      created_by: userId,
     });
     if (error) {
       toast({ title: "Failed to add", description: error.message });
