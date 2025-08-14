@@ -65,7 +65,7 @@ const DatabaseSettings = () => {
     const { error } = await supabase.from("external_databases").insert({
       name: dbName,
       type: dbType,
-      api_key: apiKey || null, // The encryption will be handled by database triggers
+      api_key: apiKey || null,
       upload_endpoint: uploadEndpoint || null,
       firm_id: firmId,
       created_by: userId,
