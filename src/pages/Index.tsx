@@ -10,7 +10,7 @@ import TemplateManager from "@/components/TemplateManager";
 import DocumentGenerator from "@/components/DocumentGenerator";
 import DatabaseSettings from "@/components/DatabaseSettings";
 import { AuthModal } from "@/components/AuthModal";
-import { FirmRegistrationModal } from "@/components/FirmRegistrationModal";
+
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import QueryStatusPanel from "@/components/QueryStatusPanel";
@@ -19,7 +19,7 @@ import { GenerationStatusProvider } from "@/hooks/useGenerationStatus";
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showFirmRegistrationModal, setShowFirmRegistrationModal] = useState(false);
+  
   const { user, profile, firm, loading } = useAuth();
 
   // Firm-scoped dashboard stats
@@ -97,32 +97,20 @@ const AppContent = () => {
               AI-powered legal document automation for law firms
             </p>
             <div className="space-y-4">
-              <Button 
+              <Button
                 onClick={() => setShowAuthModal(true)}
                 className="bg-primary hover:bg-primary/90"
                 size="lg"
               >
                 <LogIn className="mr-2 h-5 w-5" />
-                Log In / Sign Up
+                Log In
               </Button>
-              <div className="text-center">
-                <button 
-                  onClick={() => setShowFirmRegistrationModal(true)}
-                  className="text-sm text-muted-foreground hover:text-primary underline cursor-pointer"
-                >
-                  New Here? Register Your Firm
-                </button>
-              </div>
             </div>
           </div>
         </div>
         <AuthModal 
           isOpen={showAuthModal} 
           onClose={() => setShowAuthModal(false)} 
-        />
-        <FirmRegistrationModal 
-          isOpen={showFirmRegistrationModal} 
-          onClose={() => setShowFirmRegistrationModal(false)} 
         />
       </div>
     );
