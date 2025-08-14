@@ -20,24 +20,18 @@ const Header = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
               <img 
-                src="/lovable-uploads/25df65f4-3dd8-4d75-b15a-82afde02acf7.png" 
-                alt="LitAI Logo" 
-                className="h-10 w-10"
+                src="/lovable-uploads/44fdde27-99ac-4c27-8f11-8ee90e1aa916.png"
+                alt="Straus Meyers LLP Logo" 
+                className="h-12 w-auto"
               />
-              <div>
-                <h1 className="text-2xl font-bold text-steel-blue-800">LitAI</h1>
-                <p className="text-xs text-steel-blue-600">Legal Document Automation</p>
-              </div>
             </div>
           </div>
 
           <div className="flex items-center space-x-4">
-            {firm && (
-              <div className="hidden md:flex items-center space-x-2 text-steel-blue-600">
-                <Scale className="h-4 w-4" />
-                <span className="text-sm font-medium">{firm.name}</span>
-              </div>
-            )}
+            <div className="hidden md:flex items-center space-x-2 text-steel-blue-600">
+              <Scale className="h-4 w-4" />
+              <span className="text-sm font-medium">Straus Meyers LLP</span>
+            </div>
 
             {user && (
               <DropdownMenu>

@@ -112,10 +112,10 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   };
 
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim() || !selectedFirmId) {
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all fields and select your firm.",
+        description: "Please fill in all fields.",
         variant: "destructive",
       });
       return;
@@ -139,7 +139,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
-            firm_id: selectedFirmId,
+            firm_id: 'straus-meyers-llp',
             role: 'user'
           }
         }
@@ -165,7 +165,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               user_id: data.user.id,
               email: email,
               role: 'user',
-              firm_id: selectedFirmId,
+              firm_id: 'straus-meyers-llp',
             });
 
           if (profileError) {
@@ -226,7 +226,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             user_id: mockUser.id,
             email: email,
             role: 'user',
-            firm_id: selectedFirmId,
+            firm_id: 'straus-meyers-llp',
           });
 
         if (profileError) {
@@ -270,7 +270,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             user_id: data.user.id,
             email: email,
             role: 'user',
-            firm_id: selectedFirmId,
+            firm_id: 'straus-meyers-llp',
           });
 
         if (profileError) {
@@ -463,7 +463,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
-            {step === 'otp' ? 'Verify Email' : 'LitAI Authentication'}
+            {step === 'otp' ? 'Verify Email' : 'Straus Meyers LLP - Document Automation'}
           </DialogTitle>
         </DialogHeader>
 
@@ -476,7 +476,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             
             <TabsContent value="signin" className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Sign in to your LitAI account
+                Sign in to your account
               </p>
               
               <div className="space-y-2">
@@ -528,39 +528,8 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <TabsContent value="signup" className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Join your firm's LitAI account
+                Join Straus Meyers LLP's document automation platform
               </p>
-              
-              <div className="space-y-2">
-                <Label htmlFor="firm-search">Firm Name</Label>
-                <div className="relative">
-                  <Input
-                    id="firm-search"
-                    type="text"
-                    placeholder="Start typing your firm name..."
-                    value={firmName}
-                    onChange={(e) => setFirmName(e.target.value)}
-                    disabled={loading}
-                  />
-                  {firms.length > 0 && firmName.length > 1 && (
-                    <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                      {firms.map((firm) => (
-                        <div
-                          key={firm.id}
-                          className="px-3 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                          onClick={() => {
-                            setFirmName(firm.name);
-                            setSelectedFirmId(firm.id);
-                            setFirms([]); // Clear dropdown after selection
-                          }}
-                        >
-                          {firm.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="signup-email">Email</Label>
@@ -600,7 +569,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
               <Button 
                 onClick={handleSignUp}
-                disabled={loading || !selectedFirmId}
+                disabled={loading}
                 className="w-full"
               >
                 {loading ? "Creating account..." : "Sign Up"}

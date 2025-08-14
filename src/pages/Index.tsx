@@ -162,13 +162,22 @@ const AppContent = () => {
       <Header />
       
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-steel-blue-800 mb-2">
-            Welcome to LitAI
-          </h1>
-          <p className="text-steel-blue-600 text-lg">
-            Your AI-powered legal document automation platform
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-steel-blue-800 mb-2">
+              Document Automation Platform
+            </h1>
+            <p className="text-steel-blue-600 text-lg">
+              Straus Meyers LLP's AI-powered legal document system
+            </p>
+          </div>
+          <div className="hidden md:block">
+            <img 
+              src="/lovable-uploads/f110e9b5-726b-420f-bb6b-b7d835ce8d5e.png"
+              alt="Straus Meyers SM Logo" 
+              className="h-16 w-auto opacity-80"
+            />
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
