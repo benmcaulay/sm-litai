@@ -88,12 +88,12 @@ const DocumentGenerator = () => {
     const selectedCaseObj = cases.find((c: any) => c.id === selectedCase);
 
     setIsGenerating(true);
-    reset();
     setGeneratedDoc(null);
     if (download?.url) URL.revokeObjectURL(download.url);
     setDownload(null);
 
     // RAG: Locate case files, extract context, and generate with GPT using server-side function
+    reset(); // Clear previous steps only when starting new generation
     addStep(`Using case: ${selectedCaseObj?.name || 'Selected case'}`);
     addStep(template.file_type === 'docx' ? "Extracting text from .docx..." : "Preparing template context...");
     addStep("Generating answer with GPT...");

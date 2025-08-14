@@ -6,7 +6,7 @@ import { useGenerationStatus } from "@/hooks/useGenerationStatus";
 const QueryStatusPanel = () => {
   const { steps, isGenerating } = useGenerationStatus();
 
-  if (!isGenerating && steps.length === 0) return null;
+  if (steps.length === 0) return null;
 
   return (
     <Card className="bg-white/70 border-steel-blue-200 mt-6">
