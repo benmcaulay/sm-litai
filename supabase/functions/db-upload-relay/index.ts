@@ -33,11 +33,9 @@ serve(async (req) => {
       });
     }
 
-    // Load the connection, scoped by RLS to the requesting user/firm
+    // Load the connection with decrypted API key, scoped by RLS to the requesting user/firm
     const { data: connection, error: connErr } = await supabase
-      .from("external_databases")
-      .select("id, name, type, upload_endpoint, api_key")
-      .eq("id", connectionId)
+      .rpc("get_database_connection_with_decrypted_key", { connection_id: connectionId })
       .maybeSingle();
 
     if (connErr || !connection) {

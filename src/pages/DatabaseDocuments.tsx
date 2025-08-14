@@ -58,7 +58,7 @@ const DatabaseDocuments = () => {
       setLoading(true);
       try {
         const [dbRes, docsRes, casesRes] = await Promise.all([
-          supabase.from('external_databases').select('*').eq('id', id).maybeSingle(),
+          supabase.from('external_databases').select('id, name, type, status, created_by, firm_id').eq('id', id).maybeSingle(),
           (supabase as any).from('database_documents').select('*').eq('external_database_id', id).order('created_at', { ascending: false }),
           (supabase as any).from('case_files').select('id, name, created_at').order('created_at', { ascending: true })
         ]);

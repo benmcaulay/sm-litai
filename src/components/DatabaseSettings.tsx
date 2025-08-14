@@ -39,7 +39,7 @@ const DatabaseSettings = () => {
   const loadConnections = async () => {
     const { data, error } = await supabase
       .from("external_databases")
-      .select("*")
+      .select("id, name, type, status, upload_endpoint, created_by, firm_id, created_at, updated_at, last_sync_at")
       .order("created_at", { ascending: false });
     if (error) {
       toast({ title: "Error loading connections", description: error.message });
@@ -62,13 +62,11 @@ const DatabaseSettings = () => {
       setLoading(false);
       return;
     }
-    const { error } = await supabase.from("external_databases").insert({
-      name: dbName,
-      type: dbType,
-      api_key: apiKey || null,
-      upload_endpoint: uploadEndpoint || null,
-      firm_id: firmId,
-      created_by: userId,
+    const { error } = await supabase.rpc("create_encrypted_database", {
+      db_name: dbName,
+      db_type: dbType,
+      db_api_key: apiKey || null,
+      db_upload_endpoint: uploadEndpoint || null,
     });
     if (error) {
       toast({ title: "Failed to add", description: error.message });
