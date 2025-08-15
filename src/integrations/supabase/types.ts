@@ -95,39 +95,63 @@ export type Database = {
       external_databases: {
         Row: {
           api_key: string | null
+          auto_sync_enabled: boolean | null
           created_at: string
           created_by: string
           firm_id: string
           id: string
+          last_document_sync_at: string | null
           last_sync_at: string | null
           name: string
+          netdocs_repository_id: string | null
+          netdocs_workspace_id: string | null
+          oauth_access_token: string | null
+          oauth_expires_at: string | null
+          oauth_refresh_token: string | null
           status: string
+          sync_frequency_hours: number | null
           type: string
           updated_at: string
           upload_endpoint: string | null
         }
         Insert: {
           api_key?: string | null
+          auto_sync_enabled?: boolean | null
           created_at?: string
           created_by: string
           firm_id: string
           id?: string
+          last_document_sync_at?: string | null
           last_sync_at?: string | null
           name: string
+          netdocs_repository_id?: string | null
+          netdocs_workspace_id?: string | null
+          oauth_access_token?: string | null
+          oauth_expires_at?: string | null
+          oauth_refresh_token?: string | null
           status?: string
+          sync_frequency_hours?: number | null
           type: string
           updated_at?: string
           upload_endpoint?: string | null
         }
         Update: {
           api_key?: string | null
+          auto_sync_enabled?: boolean | null
           created_at?: string
           created_by?: string
           firm_id?: string
           id?: string
+          last_document_sync_at?: string | null
           last_sync_at?: string | null
           name?: string
+          netdocs_repository_id?: string | null
+          netdocs_workspace_id?: string | null
+          oauth_access_token?: string | null
+          oauth_expires_at?: string | null
+          oauth_refresh_token?: string | null
           status?: string
+          sync_frequency_hours?: number | null
           type?: string
           updated_at?: string
           upload_endpoint?: string | null
@@ -191,6 +215,111 @@ export type Database = {
           output_type?: string | null
           template_id?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      netdocs_documents: {
+        Row: {
+          ai_analysis: Json | null
+          cabinet_id: string | null
+          content_hash: string | null
+          created_at: string
+          document_name: string
+          document_path: string | null
+          document_version: string | null
+          external_database_id: string
+          file_extension: string | null
+          firm_id: string
+          id: string
+          last_modified: string | null
+          last_sync_at: string | null
+          metadata: Json | null
+          netdocs_document_id: string
+          relevance_score: number | null
+          size_bytes: number | null
+          sync_status: string | null
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          cabinet_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          document_name: string
+          document_path?: string | null
+          document_version?: string | null
+          external_database_id: string
+          file_extension?: string | null
+          firm_id: string
+          id?: string
+          last_modified?: string | null
+          last_sync_at?: string | null
+          metadata?: Json | null
+          netdocs_document_id: string
+          relevance_score?: number | null
+          size_bytes?: number | null
+          sync_status?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          ai_analysis?: Json | null
+          cabinet_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          document_name?: string
+          document_path?: string | null
+          document_version?: string | null
+          external_database_id?: string
+          file_extension?: string | null
+          firm_id?: string
+          id?: string
+          last_modified?: string | null
+          last_sync_at?: string | null
+          metadata?: Json | null
+          netdocs_document_id?: string
+          relevance_score?: number | null
+          size_bytes?: number | null
+          sync_status?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      netdocs_search_queries: {
+        Row: {
+          created_at: string
+          created_by: string
+          execution_time_ms: number | null
+          external_database_id: string
+          firm_id: string
+          id: string
+          query_type: string
+          results_count: number | null
+          search_parameters: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          execution_time_ms?: number | null
+          external_database_id: string
+          firm_id: string
+          id?: string
+          query_type: string
+          results_count?: number | null
+          search_parameters?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          execution_time_ms?: number | null
+          external_database_id?: string
+          firm_id?: string
+          id?: string
+          query_type?: string
+          results_count?: number | null
+          search_parameters?: Json
         }
         Relationships: []
       }

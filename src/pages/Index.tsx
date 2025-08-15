@@ -9,6 +9,7 @@ import Header from "@/components/Header";
 import TemplateManager from "@/components/TemplateManager";
 import DocumentGenerator from "@/components/DocumentGenerator";
 import DatabaseSettings from "@/components/DatabaseSettings";
+import IntelligentCaseAnalysis from "@/components/IntelligentCaseAnalysis";
 import { AuthModal } from "@/components/AuthModal";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -141,12 +142,15 @@ const AppContent = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full mb-8 bg-white/50 ${profile?.role === 'admin' ? 'grid-cols-5' : 'grid-cols-3'}`}>
+          <TabsList className={`grid w-full mb-8 bg-white/50 ${profile?.role === 'admin' ? 'grid-cols-6' : 'grid-cols-4'}`}>
             <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               Overview
             </TabsTrigger>
             <TabsTrigger value="generate" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               Generate
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              AI Analysis
             </TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               Templates
@@ -277,6 +281,10 @@ const AppContent = () => {
 
           <TabsContent value="generate" forceMount>
             <DocumentGenerator />
+          </TabsContent>
+
+          <TabsContent value="analysis">
+            <IntelligentCaseAnalysis />
           </TabsContent>
 
           <TabsContent value="templates">

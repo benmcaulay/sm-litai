@@ -48,6 +48,94 @@ const DatabaseSettings = () => {
     setConnections(data || []);
   };
 
+  const handleNetDocsAuth = async (connectionId: string) => {
+    try {
+      const response = await supabase.functions.invoke('netdocs-oauth', {
+        body: {
+          action: 'authorize',
+          externalDatabaseId: connectionId
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      // Open OAuth popup
+      const popup = window.open(response.data.authUrl, 'netdocs-auth', 'width=600,height=700');
+      
+      // Listen for OAuth completion
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed);
+          toast({
+            title: "Authentication",
+            description: "NetDocs authentication completed. Please refresh to see updated status.",
+          });
+          loadConnections();
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('NetDocs auth error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start NetDocs authentication",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNetDocsSync = async (connectionId: string) => {
+    try {
+      const response = await supabase.functions.invoke('netdocs-sync', {
+        body: {
+          externalDatabaseId: connectionId,
+          action: 'sync'
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      toast({
+        title: "Success",
+        description: `Synced ${response.data.syncedDocuments} new documents`,
+      });
+    } catch (error) {
+      console.error('NetDocs sync error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sync NetDocs documents",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleIntelligentDiscovery = async (connectionId: string) => {
+    const caseDescription = prompt("Enter case description for intelligent discovery:");
+    if (!caseDescription) return;
+
+    try {
+      const response = await supabase.functions.invoke('intelligent-document-discovery', {
+        body: {
+          caseDescription,
+          priority: 'high'
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      toast({
+        title: "Smart Discovery Complete",
+        description: `Found ${response.data.summary.totalDocuments} documents with ${response.data.summary.highRelevanceDocuments} high-relevance matches`,
+      });
+    } catch (error) {
+      console.error('Intelligent discovery error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to execute intelligent discovery",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAddDatabase = async () => {
     if (!dbName || !dbType) {
       toast({ title: "Missing information", description: "Name and Type are required." });
@@ -62,18 +150,33 @@ const DatabaseSettings = () => {
       setLoading(false);
       return;
     }
-    const { error } = await supabase.from("external_databases").insert({
+
+    const dbConfig: any = {
       name: dbName,
       type: dbType,
-      api_key: apiKey || null,
-      upload_endpoint: uploadEndpoint || null,
       firm_id: firmId,
       created_by: userId,
-    });
+    };
+
+    // NetDocs doesn't need API key/endpoint, uses OAuth
+    if (dbType !== 'NetDocs') {
+      dbConfig.api_key = apiKey || null;
+      dbConfig.upload_endpoint = uploadEndpoint || null;
+    } else {
+      dbConfig.status = 'disconnected'; // Requires OAuth
+    }
+
+    const { error } = await supabase.from("external_databases").insert(dbConfig);
+    
     if (error) {
       toast({ title: "Failed to add", description: error.message });
     } else {
-      toast({ title: "Database added", description: "Connection saved successfully." });
+      toast({ 
+        title: "Database added", 
+        description: dbType === 'NetDocs' 
+          ? "NetDocs connection created. Please authenticate to complete setup."
+          : "Connection saved successfully." 
+      });
       setDbName("");
       setDbType(undefined);
       setApiKey("");
@@ -284,18 +387,57 @@ const DatabaseSettings = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4">
-                  <div className="text-right text-sm text-steel-blue-600">
+                <div className="flex items-center space-x-2">
+                  <div className="text-right text-sm text-steel-blue-600 mr-2">
                     <div>Last sync: {db.last_sync_at ? new Date(db.last_sync_at).toLocaleString() : "-"}</div>
+                    {db.type === 'NetDocs' && db.status === 'disconnected' && (
+                      <div className="text-amber-600 text-xs">OAuth required</div>
+                    )}
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => openUpload(db.id)}
-                    className="border-steel-blue-300"
-                  >
-                    Upload File
-                  </Button>
+                  
+                  {db.type === 'NetDocs' && db.status === 'disconnected' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleNetDocsAuth(db.id)}
+                      className="border-primary text-primary hover:bg-primary hover:text-white"
+                    >
+                      Authenticate
+                    </Button>
+                  )}
+                  
+                  {db.type === 'NetDocs' && db.status === 'connected' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleNetDocsSync(db.id)}
+                        className="border-steel-blue-300 hover:bg-steel-blue-50"
+                      >
+                        Sync Documents
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleIntelligentDiscovery(db.id)}
+                        className="bg-gradient-to-r from-primary to-primary-glow text-white border-primary hover:opacity-90"
+                      >
+                        Smart Discovery
+                      </Button>
+                    </>
+                  )}
+                  
+                  {db.type !== 'NetDocs' && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openUpload(db.id)}
+                      className="border-steel-blue-300"
+                    >
+                      Upload File
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="outline"
                     size="sm"
@@ -395,7 +537,7 @@ const DatabaseSettings = () => {
                   <SelectValue placeholder="Select database type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="netdocs">NetDocs</SelectItem>
+                  <SelectItem value="NetDocs">NetDocs (OAuth)</SelectItem>
                   <SelectItem value="centerbase">Centerbase</SelectItem>
                   <SelectItem value="sharepoint">SharePoint</SelectItem>
                   <SelectItem value="box">Box</SelectItem>
@@ -404,29 +546,42 @@ const DatabaseSettings = () => {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="apiKey" className="text-steel-blue-700">API Key / Connection String</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder="Enter API key or connection details"
-                className="border-steel-blue-300 focus:border-primary"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-            </div>
+            {dbType !== 'NetDocs' && (
+              <>
+                <div>
+                  <Label htmlFor="apiKey" className="text-steel-blue-700">API Key / Connection String</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    placeholder="Enter API key or connection details"
+                    className="border-steel-blue-300 focus:border-primary"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                </div>
 
-            <div>
-              <Label htmlFor="uploadEndpoint" className="text-steel-blue-700">Upload Endpoint URL</Label>
-              <Input
-                id="uploadEndpoint"
-                type="url"
-                placeholder="https://example.com/upload"
-                className="border-steel-blue-300 focus:border-primary"
-                value={uploadEndpoint}
-                onChange={(e) => setUploadEndpoint(e.target.value)}
-              />
-            </div>
+                <div>
+                  <Label htmlFor="uploadEndpoint" className="text-steel-blue-700">Upload Endpoint URL</Label>
+                  <Input
+                    id="uploadEndpoint"
+                    type="url"
+                    placeholder="https://example.com/upload"
+                    className="border-steel-blue-300 focus:border-primary"
+                    value={uploadEndpoint}
+                    onChange={(e) => setUploadEndpoint(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {dbType === 'NetDocs' && (
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  <strong>NetDocs Integration:</strong> Uses OAuth authentication. After creating the connection, 
+                  you'll need to authenticate with your NetDocs credentials to enable document discovery and sync.
+                </p>
+              </div>
+            )}
 
             <Button className="w-full bg-primary hover:bg-primary/90" onClick={handleAddDatabase} disabled={loading}>
               <Database className="mr-2 h-4 w-4" />
