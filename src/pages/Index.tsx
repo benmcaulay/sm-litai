@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, FileText, Database, MessageSquare, Shield, Zap, Scale, BookOpen, LogIn } from "lucide-react";
 import Header from "@/components/Header";
-import AdminSetup from "@/components/AdminSetup";
+
 import TemplateManager from "@/components/TemplateManager";
 import DocumentGenerator from "@/components/DocumentGenerator";
 import DatabaseSettings from "@/components/DatabaseSettings";
@@ -69,7 +69,7 @@ const AppContent = () => {
     return () => window.removeEventListener('generated_document_created', handler as EventListener);
   }, [profile?.firm_id]);
 
-  const isSetupComplete = profile?.role === 'admin' ? !!firm : !!firm;
+  
 
   if (loading) {
     return (
@@ -116,34 +116,6 @@ const AppContent = () => {
     );
   }
 
-  if (profile?.role === 'admin' && !isSetupComplete) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-steel-blue-50 to-steel-blue-100">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <AdminSetup onSetupComplete={() => window.location.reload()} />
-        </div>
-      </div>
-    );
-  }
-
-  if (profile?.role === 'user' && !firm) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-steel-blue-50 to-steel-blue-100">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto text-center">
-            <h1 className="text-4xl font-bold text-steel-blue-800 mb-4">
-              Firm Not Set Up
-            </h1>
-            <p className="text-steel-blue-600 text-lg">
-              Your firm has not been configured yet. Please contact your administrator.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-steel-blue-50 to-steel-blue-100">
