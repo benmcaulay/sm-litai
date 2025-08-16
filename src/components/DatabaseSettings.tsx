@@ -50,29 +50,37 @@ const DatabaseSettings = () => {
 
   const handleNetDocsAuth = async (connectionId: string) => {
     try {
-      const response = await supabase.functions.invoke('netdocs-oauth', {
-        body: {
+      const response = await fetch('/api/netdocs-oauth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
           action: 'authorize',
           externalDatabaseId: connectionId
-        }
+        })
       });
 
-      if (response.error) throw response.error;
+      if (!response.ok) throw new Error('Failed to start NetDocs auth');
+      const data = await response.json();
 
       // Open OAuth popup
-      const popup = window.open(response.data.authUrl, 'netdocs-auth', 'width=600,height=700');
-      
-      // Listen for OAuth completion
-      const checkClosed = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(checkClosed);
-          toast({
-            title: "Authentication",
-            description: "NetDocs authentication completed. Please refresh to see updated status.",
-          });
-          loadConnections();
-        }
-      }, 1000);
+      if (data?.authorizationUrl) {
+        const popup = window.open(data.authorizationUrl, 'netdocs-oauth', 'width=600,height=700');
+        
+        // Listen for OAuth completion
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed);
+            toast({
+              title: "Authentication",
+              description: "NetDocs authentication completed. Please refresh to see updated status.",
+            });
+            loadConnections();
+          }
+        }, 1000);
+      }
     } catch (error) {
       console.error('NetDocs auth error:', error);
       toast({
@@ -85,18 +93,24 @@ const DatabaseSettings = () => {
 
   const handleNetDocsSync = async (connectionId: string) => {
     try {
-      const response = await supabase.functions.invoke('netdocs-sync', {
-        body: {
+      const response = await fetch('/api/netdocs-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
           externalDatabaseId: connectionId,
           action: 'sync'
-        }
+        })
       });
 
-      if (response.error) throw response.error;
+      if (!response.ok) throw new Error('Failed to sync NetDocs');
+      const data = await response.json();
 
       toast({
-        title: "Success",
-        description: `Synced ${response.data.syncedDocuments} new documents`,
+        title: "Sync completed",
+        description: `Synced ${data?.syncedDocuments || 0} documents`,
       });
     } catch (error) {
       console.error('NetDocs sync error:', error);
@@ -113,18 +127,24 @@ const DatabaseSettings = () => {
     if (!caseDescription) return;
 
     try {
-      const response = await supabase.functions.invoke('intelligent-document-discovery', {
-        body: {
+      const response = await fetch('/api/intelligent-document-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
           caseDescription,
           priority: 'high'
-        }
+        })
       });
 
-      if (response.error) throw response.error;
+      if (!response.ok) throw new Error('Failed to run intelligent discovery');
+      const data = await response.json();
 
       toast({
-        title: "Smart Discovery Complete",
-        description: `Found ${response.data.summary.totalDocuments} documents with ${response.data.summary.highRelevanceDocuments} high-relevance matches`,
+        title: "Discovery completed",
+        description: `Found ${data?.summary?.totalDocuments || 0} relevant documents`,
       });
     } catch (error) {
       console.error('Intelligent discovery error:', error);
@@ -212,15 +232,22 @@ const DatabaseSettings = () => {
       return;
     }
 
-    const { error: forwardErr } = await supabase.functions.invoke("db-upload-relay", {
-      body: {
+    const forwardResponse = await fetch('/api/db-upload-relay', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+      },
+      body: JSON.stringify({
         connectionId: activeConnectionId,
         storagePath: path,
         bucket: "database-uploads",
         filename: file.name,
         mimeType: file.type,
-      },
+      }),
     });
+
+    const forwardErr = !forwardResponse.ok ? new Error('Upload relay failed') : null;
 
     // Record in database_documents for organization
     const { data: firmId, error: firmErr } = await supabase.rpc("get_user_firm_id");

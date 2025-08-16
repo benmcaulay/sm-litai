@@ -74,28 +74,32 @@ const IntelligentCaseAnalysis = () => {
         setAnalysisProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const response = await supabase.functions.invoke('intelligent-document-discovery', {
-        body: {
+      const response = await fetch('/api/intelligent-document-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
           caseDescription,
           keyParties: keyParties.split(',').map(p => p.trim()).filter(Boolean),
           legalIssues: legalIssues.split(',').map(i => i.trim()).filter(Boolean),
           timeframe: timeframe.start && timeframe.end ? timeframe : undefined,
           priority
-        }
+        })
       });
+
+      if (!response.ok) throw new Error('Analysis failed');
+      const responseData = await response.json();
 
       clearInterval(progressInterval);
       setAnalysisProgress(100);
 
-      if (response.error) {
-        throw response.error;
-      }
-
-      setResults(response.data);
+      setResults(responseData || {});
       
       toast({
         title: "Analysis Complete",
-        description: `Found ${response.data.summary.totalDocuments} documents with ${response.data.summary.completenessScore}% case coverage`,
+        description: `Found ${responseData?.summary?.totalDocuments || 0} documents with ${responseData?.summary?.completenessScore || 0}% case coverage`,
       });
 
     } catch (error) {
