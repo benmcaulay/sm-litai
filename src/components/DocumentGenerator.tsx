@@ -1,16 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File, Folder } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MessageSquare, FileText, Download, Eye, Loader2, CheckCircle, File, Folder, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Document as DocxDocument, Packer, Paragraph, HeadingLevel, TextRun } from 'docx';
 import QueryStatusPanel from "@/components/QueryStatusPanel";
 import { useGenerationStatus } from "@/hooks/useGenerationStatus";
+
+interface CaseFile {
+  id: string;
+  filename: string;
+  mime_type: string;
+  created_at: string;
+}
 
 const DocumentGenerator = () => {
   const [query, setQuery] = useState("");
@@ -22,6 +30,12 @@ const DocumentGenerator = () => {
   const [templates, setTemplates] = useState<any[]>([]);
   const { toast } = useToast();
   const { user, profile } = useAuth();
+
+  // File selection states
+  const [referenceSpecificFiles, setReferenceSpecificFiles] = useState(false);
+  const [caseFiles, setCaseFiles] = useState<CaseFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
 
   const [download, setDownload] = useState<{ url: string; filename: string; mime: string } | null>(null);
 
@@ -66,6 +80,34 @@ const DocumentGenerator = () => {
     }
   };
 
+  const fetchCaseFiles = async () => {
+    if (!profile?.firm_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('database_documents')
+        .select('id, filename, mime_type, created_at')
+        .eq('firm_id', profile.firm_id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setCaseFiles(data || []);
+    } catch (error) {
+      console.error('Error fetching case files:', error);
+      setCaseFiles([]);
+    }
+  };
+
+  // Effect to fetch files when checkbox is checked
+  useEffect(() => {
+    if (referenceSpecificFiles) {
+      fetchCaseFiles();
+    } else {
+      setCaseFiles([]);
+    }
+    // Clear selected files when checkbox state changes
+    setSelectedFiles([]);
+  }, [referenceSpecificFiles, profile?.firm_id]);
+
   const handleGenerate = async () => {
     if (!selectedCase || !selectedTemplate) {
       toast({
@@ -105,6 +147,7 @@ const DocumentGenerator = () => {
           templateId: selectedTemplate,
           caseId: selectedCase,
           caseName: selectedCaseObj?.name || null,
+          specificFiles: referenceSpecificFiles ? selectedFiles : null,
         }
       });
 
@@ -291,6 +334,118 @@ This document has been generated using RAG technology to ensure accuracy and pre
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Reference Specific Files Checkbox */}
+            <div className="col-span-full">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="reference-specific-files"
+                  checked={referenceSpecificFiles}
+                  onCheckedChange={(checked) => setReferenceSpecificFiles(checked === true)}
+                  disabled={!selectedCase}
+                />
+                <label
+                  htmlFor="reference-specific-files"
+                  className="text-sm font-medium text-steel-blue-700 cursor-pointer"
+                >
+                  Reference Specific Files?
+                </label>
+              </div>
+              {!selectedCase && (
+                <p className="text-xs text-steel-blue-500 mt-1">
+                  Select a case first to enable file selection
+                </p>
+              )}
+            </div>
+
+            {/* File Selection UI */}
+            {referenceSpecificFiles && selectedCase && (
+              <div className="col-span-full space-y-3 p-4 bg-steel-blue-50 rounded-lg border border-steel-blue-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-steel-blue-700">
+                    Select Files from Documents ({caseFiles.length} available)
+                  </label>
+                  {selectedFiles.length > 0 && (
+                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                      {selectedFiles.length} selected
+                    </Badge>
+                  )}
+                </div>
+                
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-steel-blue-400" />
+                  <input
+                    type="text"
+                    placeholder="Search documents..."
+                    value={fileSearchQuery}
+                    onChange={(e) => setFileSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-steel-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+
+                {/* File List */}
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {caseFiles
+                    .filter(file => 
+                      fileSearchQuery === '' || 
+                      file.filename.toLowerCase().includes(fileSearchQuery.toLowerCase())
+                    )
+                    .map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center space-x-3 p-2 bg-white rounded border border-steel-blue-200 hover:bg-steel-blue-25"
+                      >
+                        <Checkbox
+                          id={`file-${file.id}`}
+                          checked={selectedFiles.includes(file.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedFiles([...selectedFiles, file.id]);
+                            } else {
+                              setSelectedFiles(selectedFiles.filter(id => id !== file.id));
+                            }
+                          }}
+                        />
+                        <div className="flex items-center flex-1 min-w-0">
+                          <File className="h-4 w-4 text-steel-blue-500 mr-2 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-steel-blue-800 truncate">
+                              {file.filename}
+                            </p>
+                            <p className="text-xs text-steel-blue-500">
+                              {file.mime_type} • {new Date(file.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+                  {caseFiles.length === 0 && (
+                    <div className="text-center py-6 text-steel-blue-500">
+                      <File className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No documents found for this firm</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Clear Selection Button */}
+                {selectedFiles.length > 0 && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFiles([])}
+                      className="text-steel-blue-600 border-steel-blue-300"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear Selection
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-steel-blue-700 mb-2">
