@@ -99,22 +99,16 @@ const DocumentGenerator = () => {
     addStep("Generating answer with GPT...");
 
     try {
-      const response = await fetch('/api/rag-generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('rag-generate', {
+        body: {
           query,
           templateId: selectedTemplate,
           caseId: selectedCase,
           caseName: selectedCaseObj?.name || null,
-        }),
+        }
       });
 
-      if (!response.ok) throw new Error('Document generation failed');
-      const data = await response.json();
+      if (error) throw error;
 
       const sourceLabel = data?.source?.filename || (Array.isArray(data?.sources) && data.sources[0]?.filename);
       addStep(sourceLabel ? `Verified answer generated from ${sourceLabel}.` : 'Verified answer generated from uploaded files.');

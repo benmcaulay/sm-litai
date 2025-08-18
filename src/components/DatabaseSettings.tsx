@@ -50,20 +50,14 @@ const DatabaseSettings = () => {
 
   const handleNetDocsAuth = async (connectionId: string) => {
     try {
-      const response = await fetch('/api/netdocs-oauth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('netdocs-oauth', {
+        body: {
           action: 'authorize',
           externalDatabaseId: connectionId
-        })
+        }
       });
 
-      if (!response.ok) throw new Error('Failed to start NetDocs auth');
-      const data = await response.json();
+      if (error) throw error;
 
       // Open OAuth popup
       if (data?.authorizationUrl) {
@@ -93,30 +87,26 @@ const DatabaseSettings = () => {
 
   const handleNetDocsSync = async (connectionId: string) => {
     try {
-      const response = await fetch('/api/netdocs-sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('netdocs-sync', {
+        body: {
           externalDatabaseId: connectionId,
           action: 'sync'
-        })
+        }
       });
 
-      if (!response.ok) throw new Error('Failed to sync NetDocs');
-      const data = await response.json();
-
+      if (error) throw error;
+      
       toast({
-        title: "Sync completed",
-        description: `Synced ${data?.syncedDocuments || 0} documents`,
+        title: "Sync Started",
+        description: "NetDocs synchronization has been initiated.",
       });
+      
+      loadConnections();
     } catch (error) {
       console.error('NetDocs sync error:', error);
       toast({
         title: "Error",
-        description: "Failed to sync NetDocs documents",
+        description: "Failed to sync NetDocs",
         variant: "destructive",
       });
     }
@@ -127,30 +117,24 @@ const DatabaseSettings = () => {
     if (!caseDescription) return;
 
     try {
-      const response = await fetch('/api/intelligent-document-discovery', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('intelligent-document-discovery', {
+        body: {
           caseDescription,
           priority: 'high'
-        })
+        }
       });
 
-      if (!response.ok) throw new Error('Failed to run intelligent discovery');
-      const data = await response.json();
-
+      if (error) throw error;
+      
       toast({
-        title: "Discovery completed",
-        description: `Found ${data?.summary?.totalDocuments || 0} relevant documents`,
+        title: "Discovery Started",
+        description: "Intelligent document discovery has been initiated.",
       });
     } catch (error) {
       console.error('Intelligent discovery error:', error);
       toast({
         title: "Error",
-        description: "Failed to execute intelligent discovery",
+        description: "Failed to start document discovery",
         variant: "destructive",
       });
     }
@@ -241,22 +225,17 @@ const DatabaseSettings = () => {
       return;
     }
 
-    const forwardResponse = await fetch('/api/db-upload-relay', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-      },
-      body: JSON.stringify({
+    const { data: forwardData, error: forwardError } = await supabase.functions.invoke('db-upload-relay', {
+      body: {
         connectionId: activeConnectionId,
         storagePath: path,
         bucket: "database-uploads",
         filename: file.name,
         mimeType: file.type,
-      }),
+      }
     });
 
-    const forwardErr = !forwardResponse.ok ? new Error('Upload relay failed') : null;
+    const forwardErr = forwardError;
 
     // Record in database_documents for organization
     const { data: firmId, error: firmErr } = await supabase.rpc("get_user_firm_id");
@@ -330,18 +309,55 @@ const DatabaseSettings = () => {
     fetchStats();
   }, [profile?.firm_id]);
 
-  const handleTestConnection = (dbId: string | number) => {
+  const handleTestConnection = async (dbId: string | number) => {
     toast({
       title: "Testing Connection",
       description: "Verifying database connectivity...",
     });
 
-    setTimeout(() => {
+    try {
+      // Find the connection to get its actual status
+      const connection = connections.find(conn => conn.id === dbId);
+      if (!connection) {
+        throw new Error("Connection not found");
+      }
+
+      // For NetDocs, check if it has valid OAuth tokens
+      if (connection.type === 'NetDocs') {
+        if (connection.status === 'connected') {
+          toast({
+            title: "Connection Active",
+            description: "NetDocs connection is authenticated and ready.",
+          });
+        } else {
+          toast({
+            title: "Authentication Required",
+            description: "NetDocs connection needs authentication. Please click Authenticate.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // For other connection types, show basic status
+        if (connection.status === 'connected') {
+          toast({
+            title: "Connection Active",
+            description: "Database connection is active and responding.",
+          });
+        } else {
+          toast({
+            title: "Connection Issue",
+            description: "Database connection appears to be disconnected.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
       toast({
-        title: "Connection Successful",
-        description: "Database is accessible and responding normally.",
+        title: "Connection Error",
+        description: "Unable to verify database connectivity.",
+        variant: "destructive",
       });
-    }, 2000);
+    }
   };
 
   const handleSyncNow = () => {

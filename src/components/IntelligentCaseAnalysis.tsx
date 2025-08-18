@@ -74,23 +74,18 @@ const IntelligentCaseAnalysis = () => {
         setAnalysisProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const response = await fetch('/api/intelligent-document-discovery', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('intelligent-document-discovery', {
+        body: {
           caseDescription,
           keyParties: keyParties.split(',').map(p => p.trim()).filter(Boolean),
           legalIssues: legalIssues.split(',').map(i => i.trim()).filter(Boolean),
           timeframe: timeframe.start && timeframe.end ? timeframe : undefined,
           priority
-        })
+        }
       });
 
-      if (!response.ok) throw new Error('Analysis failed');
-      const responseData = await response.json();
+      if (error) throw error;
+      const responseData = data;
 
       clearInterval(progressInterval);
       setAnalysisProgress(100);
