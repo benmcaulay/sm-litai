@@ -67,20 +67,6 @@ const DatabaseSettings = () => {
       if (data?.authUrl) {
         console.log('Opening NetDocs OAuth URL:', data.authUrl);
         
-        // Test if we can reach the domain first
-        try {
-          await fetch('https://api.netdocuments.com', { mode: 'no-cors' });
-          console.log('NetDocs API is reachable');
-        } catch (fetchError) {
-          console.error('Cannot reach NetDocs API:', fetchError);
-          toast({
-            title: "Network Error",
-            description: "Cannot reach api.netdocuments.com. Please check your internet connection or try again later.",
-            variant: "destructive",
-          });
-          return;
-        }
-
         const popup = window.open(data.authUrl, 'netdocs-oauth', 'width=600,height=700');
         
         if (!popup) {
