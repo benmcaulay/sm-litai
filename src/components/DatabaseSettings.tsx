@@ -50,6 +50,8 @@ const DatabaseSettings = () => {
 
   const handleNetDocsAuth = async (connectionId: string) => {
     try {
+      console.log('Starting NetDocs authentication for connection:', connectionId);
+      
       const { data, error } = await supabase.functions.invoke('netdocs-oauth', {
         body: {
           action: 'authorize',
@@ -57,16 +59,44 @@ const DatabaseSettings = () => {
         }
       });
 
+      console.log('NetDocs OAuth response:', { data, error });
+
       if (error) throw error;
 
       // Open OAuth popup
       if (data?.authUrl) {
+        console.log('Opening NetDocs OAuth URL:', data.authUrl);
+        
+        // Test if we can reach the domain first
+        try {
+          await fetch('https://api.netdocuments.com', { mode: 'no-cors' });
+          console.log('NetDocs API is reachable');
+        } catch (fetchError) {
+          console.error('Cannot reach NetDocs API:', fetchError);
+          toast({
+            title: "Network Error",
+            description: "Cannot reach api.netdocuments.com. Please check your internet connection or try again later.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const popup = window.open(data.authUrl, 'netdocs-oauth', 'width=600,height=700');
         
+        if (!popup) {
+          toast({
+            title: "Popup Blocked",
+            description: "Please allow popups for this site to complete NetDocs authentication.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         // Listen for OAuth completion
         const checkClosed = setInterval(() => {
           if (popup?.closed) {
             clearInterval(checkClosed);
+            console.log('NetDocs OAuth popup closed');
             toast({
               title: "Authentication",
               description: "NetDocs authentication completed. Please refresh to see updated status.",
@@ -74,6 +104,18 @@ const DatabaseSettings = () => {
             loadConnections();
           }
         }, 1000);
+
+        // Listen for messages from the callback page
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'NETDOCS_OAUTH_COMPLETE') {
+            console.log('Received OAuth completion message');
+            clearInterval(checkClosed);
+            popup?.close();
+            loadConnections();
+            window.removeEventListener('message', handleMessage);
+          }
+        };
+        window.addEventListener('message', handleMessage);
       }
     } catch (error) {
       console.error('NetDocs auth error:', error);
