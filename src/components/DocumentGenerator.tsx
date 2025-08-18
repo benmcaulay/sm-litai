@@ -309,7 +309,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
             AI Document Generator
           </CardTitle>
           <CardDescription className="text-steel-blue-600">
-            Generate legal documents using AI with RAG technology - supports both Word (.docx) and text templates
+            Draft new legal documents using context from similar case files
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -335,8 +335,38 @@ This document has been generated using RAG technology to ensure accuracy and pre
               </Select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-steel-blue-700 mb-2">
+                Select Template
+              </label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className="border-steel-blue-300">
+                  <SelectValue placeholder="Choose a document template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      <div className="flex items-center gap-2">
+                        {template.file_type === 'docx' ? 
+                          <File className="h-4 w-4 text-blue-500" /> : 
+                          <FileText className="h-4 w-4 text-gray-500" />
+                        }
+                        <div>
+                          <div className="font-medium">{template.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {template.category} • {template.file_type?.toUpperCase() || 'TEXT'}
+                          </div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
             {/* Reference Specific Files Checkbox */}
-            <div className="col-span-full">
+            <div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="reference-specific-files"
@@ -360,7 +390,7 @@ This document has been generated using RAG technology to ensure accuracy and pre
 
             {/* File Selection UI */}
             {referenceSpecificFiles && selectedCase && (
-              <div className="col-span-full space-y-3 p-4 bg-steel-blue-50 rounded-lg border border-steel-blue-200">
+              <div className="space-y-3 p-4 bg-steel-blue-50 rounded-lg border border-steel-blue-200">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-steel-blue-700">
                     Select Files from Documents ({caseFiles.length} available)
@@ -446,36 +476,6 @@ This document has been generated using RAG technology to ensure accuracy and pre
                 )}
               </div>
             )}
-
-            <div>
-              <label className="block text-sm font-medium text-steel-blue-700 mb-2">
-                Select Template
-              </label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger className="border-steel-blue-300">
-                  <SelectValue placeholder="Choose a document template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      <div className="flex items-center gap-2">
-                        {template.file_type === 'docx' ? 
-                          <File className="h-4 w-4 text-blue-500" /> : 
-                          <FileText className="h-4 w-4 text-gray-500" />
-                        }
-                        <div>
-                          <div className="font-medium">{template.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {template.category} • {template.file_type?.toUpperCase() || 'TEXT'}
-                          </div>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-steel-blue-700 mb-2">
