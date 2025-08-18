@@ -162,11 +162,20 @@ const DatabaseSettings = () => {
       return;
     }
     setLoading(true);
-    const { data: userRes } = await supabase.auth.getUser();
-    const userId = userRes?.user?.id;
-    const { data: firmId, error: firmErr } = await supabase.rpc("get_user_firm_id");
-    if (!userId || firmErr) {
-      toast({ title: "Auth error", description: "Please sign in and ensure your profile is set." });
+    
+    // Get current user
+    const { data: userRes, error: userError } = await supabase.auth.getUser();
+    if (userError || !userRes?.user?.id) {
+      toast({ title: "Auth error", description: "Please sign in first." });
+      setLoading(false);
+      return;
+    }
+    
+    const userId = userRes.user.id;
+    
+    // Get user's firm_id from profile
+    if (!profile?.firm_id) {
+      toast({ title: "Profile error", description: "Your profile doesn't have a firm assigned. Please contact support." });
       setLoading(false);
       return;
     }
@@ -174,7 +183,7 @@ const DatabaseSettings = () => {
     const dbConfig: any = {
       name: dbName,
       type: dbType,
-      firm_id: firmId,
+      firm_id: profile.firm_id,
       created_by: userId,
     };
 
