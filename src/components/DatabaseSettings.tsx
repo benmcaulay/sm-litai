@@ -60,8 +60,8 @@ const DatabaseSettings = () => {
       if (error) throw error;
 
       // Open OAuth popup
-      if (data?.authorizationUrl) {
-        const popup = window.open(data.authorizationUrl, 'netdocs-oauth', 'width=600,height=700');
+      if (data?.authUrl) {
+        const popup = window.open(data.authUrl, 'netdocs-oauth', 'width=600,height=700');
         
         // Listen for OAuth completion
         const checkClosed = setInterval(() => {
