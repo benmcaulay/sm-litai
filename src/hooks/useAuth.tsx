@@ -71,7 +71,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!existing) {
         const metadata = user.user_metadata || {};
         const role = (metadata.role === 'admin' || metadata.role === 'user') ? metadata.role : 'user';
-        const firm_id = metadata.firm_id ?? null;
+        // Always assign to Straus Meyers firm
+        const strausMeyersFirmId = '1b783430-ab7f-4305-a394-5da53ae96233';
 
         const { data: inserted, error: insertError } = await supabase
           .from('profiles')
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             user_id: user.id,
             email: user.email ?? '',
             role,
-            firm_id,
+            firm_id: strausMeyersFirmId,
           })
           .select('*')
           .maybeSingle();
@@ -102,6 +103,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         return inserted;
       } else {
+        // If existing profile doesn't have firm_id, update it to Straus Meyers
+        if (!existing.firm_id) {
+          const strausMeyersFirmId = '1b783430-ab7f-4305-a394-5da53ae96233';
+          const { data: updated } = await supabase
+            .from('profiles')
+            .update({ firm_id: strausMeyersFirmId })
+            .eq('user_id', user.id)
+            .select('*')
+            .maybeSingle();
+          
+          if (updated) {
+            existing.firm_id = strausMeyersFirmId;
+          }
+        }
+        
         setProfile(existing);
         if (existing?.firm_id) {
           const { data: firmData } = await supabase
