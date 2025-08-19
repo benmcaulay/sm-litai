@@ -44,7 +44,7 @@ serve(async (req) => {
       const state = crypto.randomUUID();
       const redirectUri = `${req.headers.get('origin')}/netdocs-callback`;
       
-      const authUrl = new URL('https://api.netdocuments.com/v1/oauth/authorize');
+      const authUrl = new URL('https://vault.netvoyage.com/neWeb2/oauth/authorize');
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -69,7 +69,7 @@ serve(async (req) => {
 
     if (body.action === 'callback') {
       // Exchange authorization code for access token
-      const tokenResponse = await fetch('https://api.netdocuments.com/v1/oauth/token', {
+      const tokenResponse = await fetch('https://vault.netvoyage.com/neWeb2/oauth/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

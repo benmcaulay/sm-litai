@@ -98,7 +98,7 @@ async function refreshNetDocsToken(supabase: any, externalDb: any) {
   const clientId = Deno.env.get('NETDOCS_CLIENT_ID');
   const clientSecret = Deno.env.get('NETDOCS_CLIENT_SECRET');
 
-  const tokenResponse = await fetch('https://api.netdocuments.com/v1/oauth/token', {
+  const tokenResponse = await fetch('https://vault.netvoyage.com/neWeb2/oauth/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -169,7 +169,7 @@ async function discoverDocuments(supabase: any, externalDb: any, searchCriteria?
   const documents: NetDocsDocument[] = [];
   
   for (const query of searchQueries.queries || [searchQueries]) {
-    const searchUrl = new URL('https://api.netdocuments.com/v1/search');
+    const searchUrl = new URL('https://vault.netvoyage.com/neWeb2/search');
     searchUrl.searchParams.set('q', query.keywords?.join(' ') || '');
     searchUrl.searchParams.set('cabinet', externalDb.netdocs_repository_id || '');
     
@@ -224,7 +224,7 @@ async function syncDocuments(supabase: any, externalDb: any) {
   const existingIds = new Set(existingDocs?.map(doc => doc.netdocs_document_id) || []);
 
   // Fetch recent documents from NetDocs
-  const documentsUrl = new URL('https://api.netdocuments.com/v1/documents');
+  const documentsUrl = new URL('https://vault.netvoyage.com/neWeb2/documents');
   documentsUrl.searchParams.set('cabinet', externalDb.netdocs_repository_id || '');
   documentsUrl.searchParams.set('limit', '100');
   documentsUrl.searchParams.set('sort', 'modified:desc');
@@ -310,7 +310,7 @@ async function analyzeDocuments(supabase: any, externalDb: any, searchCriteria?:
     try {
       // Download document content from NetDocs
       const contentResponse = await fetch(
-        `https://api.netdocuments.com/v1/documents/${doc.netdocs_document_id}/content`,
+        `https://vault.netvoyage.com/neWeb2/documents/${doc.netdocs_document_id}/content`,
         {
           headers: {
             'Authorization': `Bearer ${externalDb.oauth_access_token}`,

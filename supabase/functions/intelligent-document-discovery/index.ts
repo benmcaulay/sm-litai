@@ -233,7 +233,7 @@ async function executeSearchPhase(externalDb: any, phase: any, openAIApiKey: str
   const startTime = Date.now();
   
   try {
-    const searchUrl = new URL('https://api.netdocuments.com/v1/search');
+    const searchUrl = new URL('https://vault.netvoyage.com/neWeb2/search');
     searchUrl.searchParams.set('q', phase.query);
     searchUrl.searchParams.set('cabinet', externalDb.netdocs_repository_id || '');
     searchUrl.searchParams.set('limit', '50');
