@@ -98,6 +98,8 @@ export type Database = {
           auto_sync_enabled: boolean | null
           created_at: string
           created_by: string
+          encrypted_oauth_access_token: string | null
+          encrypted_oauth_refresh_token: string | null
           firm_id: string
           id: string
           last_document_sync_at: string | null
@@ -119,6 +121,8 @@ export type Database = {
           auto_sync_enabled?: boolean | null
           created_at?: string
           created_by: string
+          encrypted_oauth_access_token?: string | null
+          encrypted_oauth_refresh_token?: string | null
           firm_id: string
           id?: string
           last_document_sync_at?: string | null
@@ -140,6 +144,8 @@ export type Database = {
           auto_sync_enabled?: boolean | null
           created_at?: string
           created_by?: string
+          encrypted_oauth_access_token?: string | null
+          encrypted_oauth_refresh_token?: string | null
           firm_id?: string
           id?: string
           last_document_sync_at?: string | null
@@ -416,13 +422,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      decrypt_oauth_token: {
+        Args: { encrypted_token: string }
+        Returns: string
+      }
+      encrypt_oauth_token: {
+        Args: { token_value: string }
+        Returns: string
+      }
       firm_exists: {
         Args: { p_domain: string }
         Returns: boolean
       }
+      get_decrypted_oauth_tokens: {
+        Args: { db_id: string }
+        Returns: {
+          access_token: string
+          expires_at: string
+          refresh_token: string
+        }[]
+      }
       get_firm_storage_usage_bytes: {
         Args: { bucket?: string }
         Returns: number
+      }
+      get_netdocs_secret: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          client_id: string
+          client_secret: string
+        }[]
       }
       get_user_firm_id: {
         Args: Record<PropertyKey, never>
@@ -431,6 +460,10 @@ export type Database = {
       get_user_role: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      insert_netdocs_secret: {
+        Args: { client_id: string; client_secret: string }
+        Returns: undefined
       }
       is_admin: {
         Args: Record<PropertyKey, never>
@@ -442,6 +475,15 @@ export type Database = {
           id: string
           name: string
         }[]
+      }
+      store_encrypted_oauth_tokens: {
+        Args: {
+          access_token: string
+          db_id: string
+          expires_at: string
+          refresh_token: string
+        }
+        Returns: undefined
       }
       wipe_firm_uploads: {
         Args: { bucket?: string }
