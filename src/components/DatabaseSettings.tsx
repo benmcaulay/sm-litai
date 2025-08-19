@@ -63,45 +63,15 @@ const DatabaseSettings = () => {
 
       if (error) throw error;
 
-      // Open OAuth popup
+      // Redirect to OAuth URL (no popup needed)
       if (data?.authUrl) {
-        console.log('Opening NetDocs OAuth URL:', data.authUrl);
+        console.log('Redirecting to NetDocs OAuth URL:', data.authUrl);
         
-        const popup = window.open(data.authUrl, 'netdocs-oauth', 'width=600,height=700');
+        // Store the connection ID in sessionStorage to handle it after redirect
+        sessionStorage.setItem('netdocs_connection_id', connectionId);
         
-        if (!popup) {
-          toast({
-            title: "Popup Blocked",
-            description: "Please allow popups for this site to complete NetDocs authentication.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Listen for OAuth completion
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed);
-            console.log('NetDocs OAuth popup closed');
-            toast({
-              title: "Authentication",
-              description: "NetDocs authentication completed. Please refresh to see updated status.",
-            });
-            loadConnections();
-          }
-        }, 1000);
-
-        // Listen for messages from the callback page
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data?.type === 'NETDOCS_OAUTH_COMPLETE') {
-            console.log('Received OAuth completion message');
-            clearInterval(checkClosed);
-            popup?.close();
-            loadConnections();
-            window.removeEventListener('message', handleMessage);
-          }
-        };
-        window.addEventListener('message', handleMessage);
+        // Redirect to NetDocs OAuth
+        window.location.href = data.authUrl;
       }
     } catch (error) {
       console.error('NetDocs auth error:', error);
@@ -294,6 +264,16 @@ const DatabaseSettings = () => {
 
   useEffect(() => {
     loadConnections();
+    
+    // Check if we just returned from OAuth
+    const connectionId = sessionStorage.getItem('netdocs_connection_id');
+    if (connectionId) {
+      sessionStorage.removeItem('netdocs_connection_id');
+      toast({
+        title: "Authentication Success",
+        description: "NetDocs authentication completed successfully.",
+      });
+    }
   }, []);
 
   // Stats helpers

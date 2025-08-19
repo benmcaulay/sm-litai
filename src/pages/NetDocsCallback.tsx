@@ -32,7 +32,7 @@ const NetDocsCallback = () => {
         if (error) throw error;
 
         setStatus("success");
-        setMessage("NetDocs authentication successful. You can close this window.");
+        setMessage("NetDocs authentication successful. Redirecting back to the app...");
         toast({ title: "NetDocs Connected", description: "Authentication completed successfully." });
       } catch (err: any) {
         console.error("NetDocs callback error:", err);
@@ -40,15 +40,10 @@ const NetDocsCallback = () => {
         setMessage("Failed to complete NetDocs authentication. Please try again.");
         toast({ title: "Authentication Failed", description: "Could not finish NetDocs OAuth.", variant: "destructive" });
       } finally {
-        // Notify opener and attempt to close after a brief delay
+        // Redirect back to the main app after authentication
         setTimeout(() => {
-          try {
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage({ type: "NETDOCS_OAUTH_COMPLETE" }, "*");
-            }
-          } catch {}
-          window.close();
-        }, 1200);
+          window.location.href = '/';
+        }, 1500);
       }
     };
 
@@ -65,8 +60,8 @@ const NetDocsCallback = () => {
           <div className="space-y-4 text-steel-blue-700">
             <p>{message}</p>
             {status !== "processing" && (
-              <Button variant="secondary" onClick={() => window.close()}>
-                Close Window
+              <Button variant="secondary" onClick={() => window.location.href = '/'}>
+                Return to App
               </Button>
             )}
           </div>
