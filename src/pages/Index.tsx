@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, FileText, Database, MessageSquare, Shield, Zap, Scale, BookOpen, LogIn } from "lucide-react";
+import { Settings as SettingsIcon, FileText, Database, MessageSquare, Shield, Zap, Scale, BookOpen, LogIn } from "lucide-react";
 import Header from "@/components/Header";
 
 import TemplateManager from "@/components/TemplateManager";
@@ -11,6 +11,7 @@ import DocumentGenerator from "@/components/DocumentGenerator";
 import DatabaseSettings from "@/components/DatabaseSettings";
 import IntelligentCaseAnalysis from "@/components/IntelligentCaseAnalysis";
 import { AuthModal } from "@/components/AuthModal";
+import Settings from "@/components/Settings";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -300,20 +301,7 @@ const AppContent = () => {
               </TabsContent>
 
               <TabsContent value="settings">
-                <Card className="bg-white/70 border-steel-blue-200">
-                  <CardHeader>
-                    <CardTitle className="text-steel-blue-800 flex items-center">
-                      <Settings className="mr-2 h-5 w-5 text-steel-blue-600" />
-                      Firm Settings
-                    </CardTitle>
-                    <CardDescription className="text-steel-blue-600">
-                      Manage your firm's LitAI configuration
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-steel-blue-600">Settings panel coming soon...</p>
-                  </CardContent>
-                </Card>
+                <Settings />
                 <QueryStatusPanel />
               </TabsContent>
             </>
