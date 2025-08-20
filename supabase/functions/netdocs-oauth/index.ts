@@ -90,16 +90,13 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
 
-      // Update external database with OAuth tokens
-      const { error } = await supabase
-        .from('external_databases')
-        .update({
-          oauth_access_token: tokenData.access_token,
-          oauth_refresh_token: tokenData.refresh_token,
-          oauth_expires_at: expiresAt.toISOString(),
-          status: 'connected'
-        })
-        .eq('oauth_access_token', body.state); // Find by state
+      // Update external database with encrypted OAuth tokens
+      const { error } = await supabase.rpc('store_encrypted_oauth_tokens', {
+        db_id: body.externalDatabaseId,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: expiresAt.toISOString()
+      });
 
       if (error) {
         console.error('Failed to update OAuth tokens:', error);

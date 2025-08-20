@@ -69,16 +69,13 @@ export async function POST(req: NextRequest) {
       const tokenData = await tokenResponse.json();
       const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
 
-      // Update the external database with tokens
-      const { error: updateError } = await supabase
-        .from('external_databases')
-        .update({
-          oauth_access_token: tokenData.access_token,
-          oauth_refresh_token: tokenData.refresh_token,
-          oauth_expires_at: expiresAt.toISOString(),
-          status: 'connected',
-        })
-        .eq('id', state);
+      // Update the external database with encrypted tokens
+      const { error: updateError } = await supabase.rpc('store_encrypted_oauth_tokens', {
+        db_id: state,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: expiresAt.toISOString()
+      });
 
       if (updateError) {
         console.error('Failed to update database:', updateError);

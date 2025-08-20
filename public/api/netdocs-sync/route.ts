@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json() as NetDocsSyncRequest;
 
-    // Get external database configuration
+    // Get external database configuration and decrypt OAuth tokens
     const { data: externalDb, error: dbError } = await supabase
       .from('external_databases')
       .select('*')
@@ -38,9 +38,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'External database not found' }, { status: 404 });
     }
 
-    if (!externalDb.oauth_access_token) {
+    // Get decrypted OAuth tokens
+    const { data: tokenData, error: tokenError } = await supabase.rpc('get_decrypted_oauth_tokens', {
+      db_id: body.externalDatabaseId
+    });
+    
+    if (tokenError || !tokenData?.[0]?.access_token) {
       return NextResponse.json({ error: 'NetDocs not authenticated. Please complete OAuth flow first.' }, { status: 400 });
     }
+    
+    // Add decrypted tokens to external database object
+    externalDb.oauth_access_token = tokenData[0].access_token;
+    externalDb.oauth_refresh_token = tokenData[0].refresh_token;
+    externalDb.oauth_expires_at = tokenData[0].expires_at;
 
     // Check if token needs refresh
     if (externalDb.oauth_expires_at && new Date(externalDb.oauth_expires_at) <= new Date()) {
@@ -91,14 +101,13 @@ async function refreshNetDocsToken(supabase: any, externalDb: any) {
   const tokenData = await tokenResponse.json();
   const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
 
-  await supabase
-    .from('external_databases')
-    .update({
-      oauth_access_token: tokenData.access_token,
-      oauth_refresh_token: tokenData.refresh_token || externalDb.oauth_refresh_token,
-      oauth_expires_at: expiresAt.toISOString(),
-    })
-    .eq('id', externalDb.id);
+  // Update the refresh token in database using encrypted storage
+  await supabase.rpc('store_encrypted_oauth_tokens', {
+    db_id: externalDb.id,
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token || externalDb.oauth_refresh_token,
+    expires_at: expiresAt.toISOString()
+  });
 }
 
 async function discoverDocuments(supabase: any, externalDb: any, searchCriteria?: any) {

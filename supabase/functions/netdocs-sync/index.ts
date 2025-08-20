@@ -49,12 +49,28 @@ serve(async (req) => {
 
     const body = await req.json() as NetDocsSyncRequest;
 
-    // Get external database configuration
+    // Get external database configuration and decrypt OAuth tokens
     const { data: externalDb, error: dbError } = await supabase
       .from('external_databases')
       .select('*')
       .eq('id', body.externalDatabaseId)
       .single();
+      
+    if (dbError) throw dbError;
+    
+    // Get decrypted OAuth tokens
+    const { data: tokenData, error: tokenError } = await supabase.rpc('get_decrypted_oauth_tokens', {
+      db_id: body.externalDatabaseId
+    });
+    
+    if (tokenError || !tokenData?.[0]) {
+      throw new Error('Failed to retrieve OAuth tokens');
+    }
+    
+    // Add decrypted tokens to external database object
+    externalDb.oauth_access_token = tokenData[0].access_token;
+    externalDb.oauth_refresh_token = tokenData[0].refresh_token;
+    externalDb.oauth_expires_at = tokenData[0].expires_at;
 
     if (dbError || !externalDb) {
       throw new Error('External database not found');
