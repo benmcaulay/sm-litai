@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Settings as SettingsIcon, Moon, Sun, Monitor, Palette } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Separator } from "@/components/ui/separator";
+import { NetDocsIntegration } from "./NetDocsIntegration";
 
 const Settings = () => {
   const { theme, setTheme } = useTheme();
@@ -103,6 +104,16 @@ const Settings = () => {
                   onCheckedChange={setAutoSaveEnabled}
                 />
               </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* NetDocuments Integration */}
+          <div className="space-y-4">
+            <Label className="text-steel-blue-800 font-medium">NetDocuments Integration</Label>
+            <div className="pl-0">
+              <NetDocsIntegration />
             </div>
           </div>
 

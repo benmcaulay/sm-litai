@@ -10,3 +10,12 @@ verify_jwt = true
 [functions.rag-generate]
 verify_jwt = true
 
+[functions.netdocs-auth-start]
+verify_jwt = false
+
+[functions.netdocs-auth-callback]
+verify_jwt = false
+
+[functions.netdocs-search]
+verify_jwt = true
+
