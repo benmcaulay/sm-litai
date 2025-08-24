@@ -43,6 +43,11 @@ serve(async (req) => {
     const appBaseUrl = Deno.env.get('APP_BASE_URL');
 
     if (!clientId || !clientSecret || !appBaseUrl) {
+      console.error('Missing environment variables:', {
+        clientId: !!clientId,
+        clientSecret: !!clientSecret,
+        appBaseUrl: !!appBaseUrl
+      });
       throw new Error('NetDocs OAuth credentials not configured');
     }
 
