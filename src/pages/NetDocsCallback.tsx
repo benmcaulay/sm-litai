@@ -17,6 +17,13 @@ const NetDocsCallback = () => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
+    const error = params.get("error");
+
+    if (error) {
+      setStatus("error");
+      setMessage(`OAuth error: ${error}. Please retry from the app.`);
+      return;
+    }
 
     if (!code || !state) {
       setStatus("error");
@@ -26,8 +33,6 @@ const NetDocsCallback = () => {
 
     const completeAuth = async () => {
       try {
-        // Get external database ID from state or use a default approach
-        // In a real implementation, you'd store the externalDatabaseId in the state
         const { data, error } = await supabase.functions.invoke("netdocs-oauth", {
           body: { action: "callback", code, state },
         });
