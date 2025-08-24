@@ -273,6 +273,8 @@ const DatabaseSettings = () => {
         title: "Authentication Success",
         description: "NetDocs authentication completed successfully.",
       });
+      // Reload connections to get updated status
+      setTimeout(() => loadConnections(), 1000);
     }
   }, []);
 
