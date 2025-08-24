@@ -57,7 +57,7 @@ serve(async (req) => {
       const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
       const redirectUri = `${baseUrl}/netdocs-callback`;
       
-      const authUrl = new URL('https://vault.netvoyage.com/netWeb2/OAuth.aspx');
+      const authUrl = new URL('https://vault.netvoyage.com/neWeb2/OAuth.aspx');
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('redirect_uri', redirectUri);
