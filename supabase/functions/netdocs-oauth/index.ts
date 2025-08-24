@@ -57,7 +57,7 @@ serve(async (req) => {
       const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
       const redirectUri = `${baseUrl}/netdocs-callback`;
       
-      const authUrl = new URL('https://vault.netvoyage.com/oauth2/authorize');
+      const authUrl = new URL('https://vault.netvoyage.com/netWeb2/OAuth.aspx');
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -95,7 +95,7 @@ serve(async (req) => {
       }
 
       // Exchange authorization code for access token
-      const tokenResponse = await fetch('https://vault.netvoyage.com/oauth2/token', {
+      const tokenResponse = await fetch('https://api.vault.netvoyage.com/v1/OAuth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -187,7 +187,7 @@ serve(async (req) => {
       }
 
       // Exchange refresh token for new tokens
-      const tokenResponse = await fetch('https://vault.netvoyage.com/oauth2/token', {
+      const tokenResponse = await fetch('https://api.vault.netvoyage.com/v1/OAuth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
