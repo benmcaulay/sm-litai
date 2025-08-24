@@ -63,23 +63,25 @@ const DatabaseSettings = () => {
 
       if (error) throw error;
 
-      // Redirect to OAuth URL (no popup needed)
+      // Open OAuth in a new tab so LitAI stays accessible
       if (data?.authUrl) {
-        console.log('Redirecting to NetDocs OAuth URL:', data.authUrl);
+        console.log('Opening NetDocs OAuth URL in new tab:', data.authUrl);
         
-        // Store the connection ID in sessionStorage to handle it after redirect
+        // Store identifiers to reconcile after redirect
         sessionStorage.setItem('netdocs_connection_id', connectionId);
+        if (data.state) sessionStorage.setItem('netdocs_oauth_state', data.state);
         
         // Show user what's happening
         toast({
           title: "Redirecting to NetDocs",
-          description: "You'll be redirected back to LitAI after authentication.",
+          description: "Authentication opens in a new tab. You'll return to LitAI automatically.",
         });
         
-        // Add a small delay to let the toast show
-        setTimeout(() => {
+        // Try opening a new tab; if blocked, fall back to redirecting current tab
+        const win = window.open(data.authUrl, '_blank', 'noopener,noreferrer');
+        if (!win) {
           window.location.href = data.authUrl;
-        }, 1000);
+        }
       } else {
         throw new Error("No authentication URL received from NetDocs");
       }
@@ -468,14 +470,26 @@ const DatabaseSettings = () => {
                   </div>
                   
                   {db.type === 'NetDocs' && db.status === 'disconnected' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleNetDocsAuth(db.id)}
-                      className="border-primary text-primary hover:bg-primary hover:text-white"
-                    >
-                      Authenticate
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleNetDocsAuth(db.id)}
+                        className="border-primary text-primary hover:bg-primary hover:text-white"
+                      >
+                        Authenticate
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => { 
+                          toast({ title: 'Checking status', description: 'Refreshing NetDocs connection status...' });
+                          await loadConnections();
+                        }}
+                      >
+                        Refresh status
+                      </Button>
+                    </>
                   )}
                   
                   {db.type === 'NetDocs' && db.status === 'connected' && (
