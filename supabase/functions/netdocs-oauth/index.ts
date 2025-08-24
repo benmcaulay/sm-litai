@@ -54,7 +54,8 @@ serve(async (req) => {
     if (body.action === 'authorize') {
       // Generate OAuth authorization URL
       const state = crypto.randomUUID();
-      const redirectUri = `${appBaseUrl}/netdocs-callback`;
+      const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
+      const redirectUri = `${baseUrl}/netdocs-callback`;
       
       const authUrl = new URL('https://vault.netvoyage.com/oauth2/authorize');
       authUrl.searchParams.set('client_id', clientId);
@@ -104,7 +105,7 @@ serve(async (req) => {
           client_id: clientId,
           client_secret: clientSecret,
           code: body.code!,
-          redirect_uri: `${appBaseUrl}/netdocs-callback`,
+          redirect_uri: `${(appBaseUrl || '').replace(/\/+$/, '')}/netdocs-callback`,
         }),
       });
 
