@@ -49,49 +49,52 @@ const DatabaseSettings = () => {
   };
 
   const handleNetDocsAuth = async (connectionId: string) => {
+    // Open a placeholder tab synchronously to avoid popup blockers and preserve window.opener
+    const authWindow = window.open('', '_blank');
+
     try {
       console.log('Starting NetDocs authentication for connection:', connectionId);
-      
+
+      // Give the placeholder some basic content while we fetch the URL
+      if (authWindow && authWindow.document) {
+        authWindow.document.title = 'NetDocs Authentication';
+        authWindow.document.body.style.fontFamily = 'system-ui, sans-serif';
+        authWindow.document.body.innerHTML = '<div style="padding:20px;">Redirecting to NetDocs…</div>';
+      }
+
       const { data, error } = await supabase.functions.invoke('netdocs-oauth', {
-        body: {
-          action: 'authorize',
-          externalDatabaseId: connectionId
-        }
+        body: { action: 'authorize', externalDatabaseId: connectionId }
       });
 
       console.log('NetDocs OAuth response:', { data, error });
-
       if (error) throw error;
 
-      // Open OAuth in a new tab so LitAI stays accessible
       if (data?.authUrl) {
-        console.log('Opening NetDocs OAuth URL in new tab:', data.authUrl);
-        
-        // Store identifiers to reconcile after redirect
+        console.log('Opening NetDocs OAuth URL:', data.authUrl);
         sessionStorage.setItem('netdocs_connection_id', connectionId);
         if (data.state) sessionStorage.setItem('netdocs_oauth_state', data.state);
-        
-        // Show user what's happening
+
         toast({
-          title: "Redirecting to NetDocs",
-          description: "Authentication opens in a new tab. You'll return to LitAI automatically.",
+          title: 'Continue in NetDocs',
+          description: 'Complete authentication in the new tab. This page will update automatically.',
         });
-        
-        // Try opening a new tab; if blocked, fall back to redirecting current tab
-        const win = window.open(data.authUrl, '_blank', 'noopener,noreferrer');
-        if (!win) {
-          window.location.href = data.authUrl;
+
+        if (authWindow) {
+          authWindow.location.href = data.authUrl;
+        } else {
+          // Fallbacks if popup was blocked
+          const win = window.open(data.authUrl, '_blank');
+          if (!win) {
+            window.location.href = data.authUrl; // last resort
+          }
         }
       } else {
-        throw new Error("No authentication URL received from NetDocs");
+        throw new Error('No authentication URL received from NetDocs');
       }
     } catch (error) {
       console.error('NetDocs auth error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to start NetDocs authentication",
-        variant: "destructive",
-      });
+      try { authWindow?.close(); } catch {}
+      toast({ title: 'Error', description: 'Failed to start NetDocs authentication', variant: 'destructive' });
     }
   };
 
