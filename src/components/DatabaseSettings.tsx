@@ -70,8 +70,18 @@ const DatabaseSettings = () => {
         // Store the connection ID in sessionStorage to handle it after redirect
         sessionStorage.setItem('netdocs_connection_id', connectionId);
         
-        // Redirect to NetDocs OAuth
-        window.location.href = data.authUrl;
+        // Show user what's happening
+        toast({
+          title: "Redirecting to NetDocs",
+          description: "You'll be redirected back to LitAI after authentication.",
+        });
+        
+        // Add a small delay to let the toast show
+        setTimeout(() => {
+          window.location.href = data.authUrl;
+        }, 1000);
+      } else {
+        throw new Error("No authentication URL received from NetDocs");
       }
     } catch (error) {
       console.error('NetDocs auth error:', error);

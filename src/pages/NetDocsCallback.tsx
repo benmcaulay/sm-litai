@@ -9,9 +9,14 @@ const NetDocsCallback = () => {
   const { toast } = useToast();
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [message, setMessage] = useState<string>("Completing NetDocs authentication...");
+  const [countdown, setCountdown] = useState(5);
+
+  const redirectToApp = () => {
+    window.location.href = '/';
+  };
 
   useEffect(() => {
-    document.title = "NetDocs OAuth Callback | Straus Meyers";
+    document.title = "NetDocs OAuth Callback | LitAI";
     setCanonical(window.location.href);
 
     const params = new URLSearchParams(window.location.search);
@@ -20,37 +25,57 @@ const NetDocsCallback = () => {
     const error = params.get("error");
 
     if (error) {
+      console.error("OAuth error from NetDocs:", error);
       setStatus("error");
-      setMessage(`OAuth error: ${error}. Please retry from the app.`);
+      setMessage(`OAuth error: ${error}. You can return to LitAI using the button below.`);
       return;
     }
 
     if (!code || !state) {
+      console.error("Missing callback parameters:", { code: !!code, state: !!state });
       setStatus("error");
-      setMessage("Invalid callback parameters. Please retry from the app.");
+      setMessage("Invalid callback parameters. You can return to LitAI using the button below.");
       return;
     }
 
     const completeAuth = async () => {
       try {
+        console.log("Processing NetDocs callback with code:", code.substring(0, 10) + "...");
+        
         const { data, error } = await supabase.functions.invoke("netdocs-oauth", {
           body: { action: "callback", code, state },
         });
-        if (error) throw error;
+        
+        if (error) {
+          console.error("Supabase function error:", error);
+          throw error;
+        }
 
+        console.log("NetDocs authentication successful:", data);
         setStatus("success");
-        setMessage("NetDocs authentication successful. Redirecting back to the app...");
-        toast({ title: "NetDocs Connected", description: "Authentication completed successfully." });
+        setMessage("NetDocs authentication successful! Your database is now connected to LitAI.");
+        toast({ title: "NetDocs Connected", description: "Database connection established successfully." });
+        
+        // Start countdown for automatic redirect
+        let timeLeft = 5;
+        const countdownInterval = setInterval(() => {
+          timeLeft -= 1;
+          setCountdown(timeLeft);
+          if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            redirectToApp();
+          }
+        }, 1000);
+        
       } catch (err: any) {
         console.error("NetDocs callback error:", err);
         setStatus("error");
-        setMessage("Failed to complete NetDocs authentication. Please try again.");
-        toast({ title: "Authentication Failed", description: "Could not finish NetDocs OAuth.", variant: "destructive" });
-      } finally {
-        // Redirect back to the main app after authentication
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1500);
+        setMessage(`Authentication failed: ${err.message || "Unknown error"}. You can return to LitAI using the button below.`);
+        toast({ 
+          title: "Authentication Failed", 
+          description: "Could not complete NetDocs authentication.", 
+          variant: "destructive" 
+        });
       }
     };
 
@@ -66,9 +91,27 @@ const NetDocsCallback = () => {
         <CardContent>
           <div className="space-y-4 text-steel-blue-700">
             <p>{message}</p>
+            
+            {status === "success" && (
+              <p className="text-sm text-steel-blue-600">
+                Redirecting automatically in {countdown} seconds...
+              </p>
+            )}
+            
+            {status === "processing" && (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-steel-blue-600"></div>
+                <span className="text-sm">Processing...</span>
+              </div>
+            )}
+            
             {status !== "processing" && (
-              <Button variant="secondary" onClick={() => window.location.href = '/'}>
-                Return to App
+              <Button 
+                variant={status === "success" ? "default" : "secondary"} 
+                onClick={redirectToApp}
+                className="w-full"
+              >
+                {status === "success" ? "Return to LitAI Now" : "Return to LitAI"}
               </Button>
             )}
           </div>
