@@ -277,18 +277,36 @@ const DatabaseSettings = () => {
   useEffect(() => {
     loadConnections();
     
-    // Check if we just returned from OAuth
+    // If NetDocs auth was initiated in this session, inform user
     const connectionId = sessionStorage.getItem('netdocs_connection_id');
     if (connectionId) {
-      sessionStorage.removeItem('netdocs_connection_id');
       toast({
-        title: "Authentication Success",
-        description: "NetDocs authentication completed successfully.",
+        title: "Waiting for NetDocs",
+        description: "Complete authentication in the opened tab. This page will update automatically.",
       });
-      // Reload connections to get updated status
-      setTimeout(() => loadConnections(), 1000);
     }
   }, []);
+
+  // Listen for OAuth completion messages from callback window
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event?.data || event.origin !== window.location.origin) return;
+      if (event.data.type === 'NETDOCS_AUTH_COMPLETE') {
+        if (event.data.status === 'success') {
+          toast({ title: 'NetDocs Connected', description: 'Authentication completed. Updating status...' });
+        } else {
+          toast({ title: 'Authentication Failed', description: event.data.message || 'Could not complete NetDocs authentication.', variant: 'destructive' });
+        }
+        // Clear temp data and refresh
+        sessionStorage.removeItem('netdocs_connection_id');
+        sessionStorage.removeItem('netdocs_oauth_state');
+        loadConnections();
+        window.focus?.();
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [toast]);
 
   // Stats helpers
   const formatNumber = (n: number) => new Intl.NumberFormat().format(n || 0);

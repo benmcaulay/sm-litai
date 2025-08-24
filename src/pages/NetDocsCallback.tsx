@@ -56,26 +56,37 @@ const NetDocsCallback = () => {
         setMessage("NetDocs authentication successful! Your database is now connected to LitAI.");
         toast({ title: "NetDocs Connected", description: "Database connection established successfully." });
         
-        // Start countdown for automatic redirect
-        let timeLeft = 5;
-        const countdownInterval = setInterval(() => {
-          timeLeft -= 1;
-          setCountdown(timeLeft);
-          if (timeLeft <= 0) {
-            clearInterval(countdownInterval);
-            redirectToApp();
-          }
-        }, 1000);
+        // If opened as a popup/new tab, notify opener and close this tab
+        if (window.opener) {
+          try {
+            window.opener.postMessage({ type: 'NETDOCS_AUTH_COMPLETE', status: 'success' }, window.location.origin);
+          } catch {}
+          setMessage("Authentication complete. You can close this tab.");
+          setTimeout(() => window.close(), 300);
+        } else {
+          // Fallback: Start countdown for automatic redirect
+          let timeLeft = 5;
+          const countdownInterval = setInterval(() => {
+            timeLeft -= 1;
+            setCountdown(timeLeft);
+            if (timeLeft <= 0) {
+              clearInterval(countdownInterval);
+              redirectToApp();
+            }
+          }, 1000);
+        }
         
       } catch (err: any) {
         console.error("NetDocs callback error:", err);
         setStatus("error");
         setMessage(`Authentication failed: ${err.message || "Unknown error"}. You can return to LitAI using the button below.`);
-        toast({ 
-          title: "Authentication Failed", 
-          description: "Could not complete NetDocs authentication.", 
-          variant: "destructive" 
-        });
+        toast({ title: "Authentication Failed", description: "Could not complete NetDocs authentication.", variant: "destructive" });
+        if (window.opener) {
+          try {
+            window.opener.postMessage({ type: 'NETDOCS_AUTH_COMPLETE', status: 'error', message: err?.message || 'Unknown error' }, window.location.origin);
+          } catch {}
+          setTimeout(() => window.close(), 300);
+        }
       }
     };
 
