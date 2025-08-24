@@ -64,6 +64,9 @@ serve(async (req) => {
       authUrl.searchParams.set('scope', 'read write');
       authUrl.searchParams.set('state', state);
 
+      console.log('Generated NetDocs auth URL:', authUrl.toString());
+      console.log('Redirect URI:', redirectUri);
+
       // Store state in oauth_state table for verification
       await supabaseService
         .from('oauth_state')
