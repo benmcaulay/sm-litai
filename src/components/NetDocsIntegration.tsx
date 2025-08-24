@@ -61,13 +61,20 @@ export function NetDocsIntegration() {
         return;
       }
 
-      // Use the project ID from the Supabase URL to construct functions URL
-      const functionsUrl = 'https://vrxzwhbbblkqraimfclt.functions.supabase.co';
-      const authUrl = `${functionsUrl}/netdocs-auth-start?uid=${encodeURIComponent(user.id)}`;
-      
-      // Open in popup window
+      // Call netdocs-oauth with authorize action
+      const { data, error } = await supabase.functions.invoke('netdocs-oauth', {
+        body: { action: 'authorize' }
+      });
+
+      if (error || !data?.authUrl) {
+        toast.error('Failed to initialize NetDocs authorization');
+        setIsConnecting(false);
+        return;
+      }
+
+      // Open authorization URL in popup window
       const popup = window.open(
-        authUrl, 
+        data.authUrl,
         'netdocs-auth', 
         'width=600,height=700,scrollbars=yes,resizable=yes'
       );

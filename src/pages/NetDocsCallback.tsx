@@ -26,7 +26,9 @@ const NetDocsCallback = () => {
 
     const completeAuth = async () => {
       try {
-        const { error } = await supabase.functions.invoke("netdocs-oauth", {
+        // Get external database ID from state or use a default approach
+        // In a real implementation, you'd store the externalDatabaseId in the state
+        const { data, error } = await supabase.functions.invoke("netdocs-oauth", {
           body: { action: "callback", code, state },
         });
         if (error) throw error;
