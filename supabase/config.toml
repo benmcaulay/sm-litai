@@ -22,3 +22,15 @@ verify_jwt = true
 [functions.netdocs-search]
 verify_jwt = true
 
+[functions.netdocs-cabinets]
+verify_jwt = true
+
+[functions.netdocs-folder-contents]
+verify_jwt = true
+
+[functions.netdocs-document-search]
+verify_jwt = true
+
+[functions.netdocs-document-download]
+verify_jwt = true
+
